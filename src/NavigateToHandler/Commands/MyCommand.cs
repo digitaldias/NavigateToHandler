@@ -2,10 +2,13 @@
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Reflection.Metadata.Ecma335;
+using System.Threading;
 using Community.VisualStudio.Toolkit;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Elfie.Model;
 using Microsoft.CodeAnalysis.FindSymbols;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.CSharp;
@@ -14,6 +17,7 @@ using Microsoft.VisualStudio.LanguageServices;
 using Microsoft.VisualStudio.Package;
 using Microsoft.VisualStudio.PlatformUI;
 using Microsoft.VisualStudio.Text;
+using StreamJsonRpc;
 
 namespace NavigateToHandler
 {
@@ -46,28 +50,67 @@ namespace NavigateToHandler
                     // Get the type  information
                     SemanticModel model = await roslynDocument.GetSemanticModelAsync();
                     var typeInfo = model.GetTypeInfo(syntaxNode);
-                    await VS.StatusBar.ShowMessageAsync($"Locating handler for {typeInfo.Type.Name}");
+                    var variableType = typeInfo.Type;
+
+                    if (variableType is null)
+                        return;
+                    var variableBaseTypeName = typeInfo.ConvertedType.ToDisplayString();
+                    var lessthanPosition = variableBaseTypeName.IndexOf('<');
+                    if(lessthanPosition > 0)
+                    {
+                        variableBaseTypeName = variableBaseTypeName.Substring(0, lessthanPosition);
+                    }
+
+                    await VS.StatusBar.ShowMessageAsync($"Finding calls taking {variableType.Name}");
 
                     // Bingo, this is what we're looking for
-                    if(typeInfo.ConvertedType.ToDisplayString().StartsWith("MediatR.IRequest"))
+                    if(typeInfo.ConvertedType.ToDisplayString().StartsWith(variableBaseTypeName))
                     {
-                        var namedType = (INamedTypeSymbol) typeInfo.Type;
-                        var matches = await SymbolFinder.FindReferencesAsync(namedType, workspace.CurrentSolution);
-                        if(matches.Any())
+                        var namedTypeSymbol = (INamedTypeSymbol) typeInfo.Type;
+                        var matchingReferences = await SymbolFinder.FindReferencesAsync(namedTypeSymbol, workspace.CurrentSolution);
+
+                        foreach(var matchingReference in matchingReferences )
                         {
-                            var type = matches.First();
-                            var matchedDocument = type.Locations.FirstOrDefault(location => location.Document.FilePath.EndsWith("Handler.cs"));
-                            var openedView = await VS.Documents.OpenAsync(matchedDocument.Location.SourceTree.FilePath);
-                            var line = openedView.TextBuffer.CurrentSnapshot.Lines.FirstOrDefault(line => line.GetText().Contains($" Handle({typeInfo.Type.Name}"));
-                            openedView.TextView.Caret.MoveTo(new SnapshotPoint(openedView.TextBuffer.CurrentSnapshot, line.Start.Position));
-                            await VS.StatusBar.ClearAsync();
-                            return;
+                            foreach(var location in matchingReference.Locations )
+                            {
+                                await VS.StatusBar.ShowMessageAsync($"Searching {location.Document.FilePath}");
+
+                                var matchingTree = await location.Document.GetSyntaxTreeAsync();
+                                var matchingRoot = await matchingTree.GetRootAsync();
+                                var allMethods = matchingRoot.DescendantNodes().OfType<MethodDeclarationSyntax>();
+                                var publicMethods = allMethods.Where(m
+                                    => m.Modifiers.Any(mod => mod.Text.Equals("public"))
+                                    && m.ParameterList.Parameters.Any(p => p.ToFullString().Contains(namedTypeSymbol.Name)))
+                                    .ToList();
+
+                                if (!publicMethods.Any())
+                                    continue;
+
+                                if(publicMethods.Count == 1)
+                                {
+                                    var openedView = await VS.Documents.OpenAsync(location.Document.FilePath);
+                                    openedView.TextView.Caret.MoveTo(new SnapshotPoint(openedView.TextBuffer.CurrentSnapshot, publicMethods.First().Span.Start));
+                                    openedView.TextView.Caret.EnsureVisible();
+                                    await VS.StatusBar.ClearAsync();
+                                    return;
+                                }
+
+                                if(publicMethods.Count > 1)
+                                {
+                                    var generalWindow = await VS.Windows.GetOutputWindowPaneAsync(Community.VisualStudio.Toolkit.Windows.VSOutputWindowPane.General);
+                                    foreach (var publicMethod in publicMethods)
+                                    {
+                                        string message = $"{namedTypeSymbol.Name} is used in {publicMethod.ToFullString()} in file: {location.Document.FilePath}";
+                                        await generalWindow.WriteLineAsync(message);
+                                    }
+                                    return;
+                                }
+                            }
                         }
                     }
-                    await VS.StatusBar.ShowMessageAsync($"No APIs found for {typeInfo.Type.Name}");
+                    await VS.StatusBar.ShowMessageAsync($"No public API methods found that take the type {typeInfo.Type.Name} as a parameter");
                 }
             }
-
         }
     }
 }
