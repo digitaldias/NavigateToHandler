@@ -11,7 +11,7 @@ namespace NavigateToHandler
         public const string Name = "Navigate to Handler";
         public const string Description = @"Crude version of navigating to the Handler of a Mediator.Send.";
         public const string Language = "en-US";
-        public const string Version = "0.1";
+        public const string Version = "0.3";
         public const string Author = "digitaldias";
         public const string Tags = "";
     }
