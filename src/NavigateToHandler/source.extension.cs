@@ -9,9 +9,9 @@ namespace NavigateToHandler
     {
         public const string Id = "digitaldias.NavigateToHandler.001";
         public const string Name = "Navigate to Handler";
-        public const string Description = @"Crude version of navigating to the Handler of a Mediator.Send.";
+        public const string Description = @"Crude version of navigating to the first public method that leverages a variable of the type under the cursor.";
         public const string Language = "en-US";
-        public const string Version = "0.3";
+        public const string Version = "0.4";
         public const string Author = "digitaldias";
         public const string Tags = "";
     }
