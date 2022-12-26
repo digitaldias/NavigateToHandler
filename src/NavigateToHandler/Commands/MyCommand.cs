@@ -1,4 +1,5 @@
 ﻿using System.Linq;
+using System.Threading.Tasks;
 using HandlerLocator;
 using Microsoft.CodeAnalysis;
 using Microsoft.VisualStudio.LanguageServices;
@@ -32,18 +33,26 @@ namespace NavigateToHandler
             int position = documentView.TextView.Selection.ActivePoint.Position.Position;
 
             var locator = new FindHandlerLocator(workspace.CurrentSolution, roslynDocument, documentView.FilePath, position);
-            var result = await locator.FindFirstHandler();
-            if (result is null)
+            var allHandlers = await locator.FindAllHandlers();
+            if (allHandlers is null || !allHandlers.Any())
+                return;
+
+            if(allHandlers.Count() == 1)
             {
+                await DisplayHandler(allHandlers.First());
                 return;
             }
 
             // Show the first match. TODO: Handle multiple matches
-            var openedView = await VS.Documents.OpenAsync(result.SourceFile);
-            openedView.TextView.Caret.MoveTo(new SnapshotPoint(openedView.TextBuffer.CurrentSnapshot, result.LineNumber));
+            return;
+        }
+
+        private async Task DisplayHandler(IdentifiedHandler identifiedHandler)
+        {
+            var openedView = await VS.Documents.OpenAsync(identifiedHandler.SourceFile);
+            openedView.TextView.Caret.MoveTo(new SnapshotPoint(openedView.TextBuffer.CurrentSnapshot, identifiedHandler.LineNumber));
             openedView.TextView.Caret.EnsureVisible();
             await VS.StatusBar.ClearAsync();
-            return;
         }
     }
 }
