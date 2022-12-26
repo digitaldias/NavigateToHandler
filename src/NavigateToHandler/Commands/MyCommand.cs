@@ -1,5 +1,5 @@
 ﻿using System.Linq;
-using System.Threading.Tasks;
+using EnvDTE;
 using HandlerLocator;
 using Microsoft.CodeAnalysis;
 using Microsoft.VisualStudio.LanguageServices;
@@ -39,15 +39,11 @@ namespace NavigateToHandler
 
             if(allHandlers.Count() == 1)
             {
-                await DisplayHandler(allHandlers.First());
-                return;
+                await DisplayHandlerAsync(allHandlers.First());
             }
-
-            // Show the first match. TODO: Handle multiple matches
-            return;
         }
 
-        private async Task DisplayHandler(IdentifiedHandler identifiedHandler)
+        private async Task DisplayHandlerAsync(IdentifiedHandler identifiedHandler)
         {
             var openedView = await VS.Documents.OpenAsync(identifiedHandler.SourceFile);
             openedView.TextView.Caret.MoveTo(new SnapshotPoint(openedView.TextBuffer.CurrentSnapshot, identifiedHandler.LineNumber));

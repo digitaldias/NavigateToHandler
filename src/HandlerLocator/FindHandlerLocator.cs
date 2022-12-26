@@ -87,6 +87,7 @@ namespace HandlerLocator
 
                     allHandlers.Add(new IdentifiedHandler
                     {
+                        TypeName  = location.Document.Name,
                         SourceFile = location.Document.FilePath,
                         LineNumber = publicMethods.First().SpanStart
                     });
