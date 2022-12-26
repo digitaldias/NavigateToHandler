@@ -30,12 +30,8 @@ namespace HandlerLocator
             // Get type information
             var semanticModel = await _workingDocument.GetSemanticModelAsync();
 
-            var typeInfo = GetTypeInfo(semanticModel, syntaxNode);
-            var variableType = typeInfo.Type;
-            if (variableType is null)
-                return null;
+            var symbol = GetTypeInfo(semanticModel, syntaxNode);
 
-            var symbol = (INamedTypeSymbol) typeInfo.Type;
             var references = await SymbolFinder.FindReferencesAsync(symbol, _solution);
             foreach (var reference in references)
             {
@@ -62,32 +58,31 @@ namespace HandlerLocator
             return null;
         }
 
-        private TypeInfo GetTypeInfo(SemanticModel semanticModel, SyntaxNode syntaxNode)
+        private ITypeSymbol GetTypeInfo(SemanticModel semanticModel, SyntaxNode syntaxNode)
         {
             if (syntaxNode is VariableDeclaratorSyntax variableDeclarator)
             {
-                return semanticModel.GetTypeInfo(((VariableDeclarationSyntax) variableDeclarator.Parent).Type);
+                return semanticModel.GetTypeInfo(((VariableDeclarationSyntax) variableDeclarator.Parent).Type).Type;
             }
 
             if (syntaxNode is IdentifierNameSyntax identifierName)
             {
                 return semanticModel.GetTypeInfo(identifierName.Parent) is TypeInfo typeInfo && typeInfo.Type is null
-                    ? semanticModel.GetTypeInfo(syntaxNode)
-                    : typeInfo;
+                    ? semanticModel.GetTypeInfo(syntaxNode).Type
+                    : typeInfo.Type;
             }
 
             if (syntaxNode is TypeDeclarationSyntax typeDeclarationSyntax)
             {
-                var syntaxTree = typeDeclarationSyntax.SyntaxTree;
-                return semanticModel.GetTypeInfo(syntaxTree.GetRoot());
+                return semanticModel.GetDeclaredSymbol(typeDeclarationSyntax);
             }
 
             if (syntaxNode is ConstructorDeclarationSyntax constructorDeclarationSyntax)
             {
-                return semanticModel.GetTypeInfo(constructorDeclarationSyntax.Parent);
+                return semanticModel.GetDeclaredSymbol(constructorDeclarationSyntax).ContainingType;
             }
 
-            return semanticModel.GetTypeInfo(syntaxNode);
+            return semanticModel.GetTypeInfo(syntaxNode).Type;
         }
     }
 }
