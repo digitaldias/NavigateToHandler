@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -69,6 +70,8 @@ namespace HandlerLocator
             var semanticModel = await _workingDocument.GetSemanticModelAsync();
 
             var symbol = GetTypeInfo(semanticModel, syntaxNode);
+            if (symbol is null)
+                return allHandlers;
 
             var references = await SymbolFinder.FindReferencesAsync(symbol, _solution);
             foreach (var reference in references)
@@ -77,22 +80,46 @@ namespace HandlerLocator
                 {
                     var tree = await location.Document.GetSyntaxTreeAsync();
                     var root = await tree.GetRootAsync();
+                    var regexPattern = $@"(^|\W){symbol.Name}($|\W)";
                     var allMethods = root.DescendantNodes().OfType<MethodDeclarationSyntax>();
                     var publicMethods = allMethods.Where(publicMethod =>
                         publicMethod.Modifiers.Any(modifier => modifier.Text.Equals("public")) &&
-                        publicMethod.ParameterList.Parameters.Any(parameter => parameter.ToFullString().Contains(symbol.Name)));
+                        publicMethod.ParameterList.Parameters.Any(parameter => Regex.IsMatch(parameter.ToFullString(), regexPattern, RegexOptions.IgnoreCase | RegexOptions.Compiled)))
+                        .OrderBy(m => m.ToFullString())
+                        .ToList();
 
                     if (!publicMethods.Any())
                         continue;
 
-                    allHandlers.Add(new IdentifiedHandler
+                    foreach(var method in publicMethods)
                     {
-                        TypeName  = location.Document.Name,
-                        SourceFile = location.Document.FilePath,
-                        LineNumber = publicMethods.First().SpanStart
-                    });
+                        var lineSpan = method.GetLocation().GetLineSpan();
+                        var candidate = new IdentifiedHandler
+                        {
+                            TypeToFind = symbol.Name,
+                            TypeName  = location.Document.Name.Replace(".cs", ""),
+                            PublicMethod = method.Identifier.ToFullString(),
+                            SourceFile = lineSpan.Path,
+                            DisplaySourceFile = $"{lineSpan.Path}({lineSpan.StartLinePosition.Line + 1},{lineSpan.StartLinePosition.Character + 1})",
+                            LineNumber = lineSpan.StartLinePosition.Line + 1,
+                            Column = lineSpan.StartLinePosition.Character + 1,
+                            CaretPosition = method.Span.Start
+                        };
+
+                        if (allHandlers.Any(h => h.SourceFile == candidate.SourceFile && h.PublicMethod == candidate.PublicMethod && h.LineNumber == candidate.LineNumber))
+                            continue;
+
+                        allHandlers.Add(candidate);
+                    }
                 }
             }
+
+            var longestPath = allHandlers.Max(h => h.DisplaySourceFile.Length);
+            allHandlers.ForEach(handler =>
+            {
+                var neededSpaces = longestPath - handler.DisplaySourceFile.Length;
+                handler.Fill = new string(' ', neededSpaces + 1);
+            });
 
             return allHandlers;
         }

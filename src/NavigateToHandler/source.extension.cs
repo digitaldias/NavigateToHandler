@@ -9,9 +9,9 @@ namespace NavigateToHandler
     {
         public const string Id = "digitaldias.NavigateToHandler.001";
         public const string Name = "Navigate to Handler";
-        public const string Description = @"Provides a command under the EDIT menu that allows you to navigate to the first public method across the entire solution that consumes the type under the cursor as a parameter. The type can be a variable, a parameter in a method call, or a declaration. ";
+        public const string Description = @"Provides a command under the EDIT menu that allows you to navigate to public methods across the entire solution that consume the type under the cursor as a parameter. The type can be a variable, a parameter in a method call, or a declaration. If exactly one match is found, the command opens up the relevant method. If more than one match is found, the results are displayed in the output window. ";
         public const string Language = "en-US";
-        public const string Version = "0.5";
+        public const string Version = "0.6";
         public const string Author = "digitaldias";
         public const string Tags = "";
     }
