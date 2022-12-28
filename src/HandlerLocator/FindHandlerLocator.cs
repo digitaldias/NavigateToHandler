@@ -13,14 +13,12 @@ namespace HandlerLocator
     {
         private readonly Solution _solution;
         private readonly Document _workingDocument;
-        private readonly string _activeDocumentPath;
         private readonly int _linePosition;
 
-        public FindHandlerLocator(Solution solution, Document workingDocument, string activeDocumentPath, int linePosition)
+        public FindHandlerLocator(Solution solution, Document workingDocument, int linePosition)
         {
             _solution = solution;
             _workingDocument = workingDocument;
-            _activeDocumentPath = activeDocumentPath;
             _linePosition = linePosition;
         }
 
@@ -43,7 +41,7 @@ namespace HandlerLocator
                     var root = await tree.GetRootAsync();
                     var allMethods = root.DescendantNodes().OfType<MethodDeclarationSyntax>();
                     var publicMethods = allMethods.Where(publicMethod =>
-                        publicMethod.Modifiers.Any(modifier => modifier.Text.Equals("public")) &&
+                        publicMethod.Modifiers.Any(modifier => modifier.IsKind(SyntaxKind.PublicKeyword)) &&
                         publicMethod.ParameterList.Parameters.Any(parameter => parameter.ToFullString().Contains(symbol.Name)));
 
                     if (!publicMethods.Any())
@@ -73,17 +71,18 @@ namespace HandlerLocator
             if (symbol is null)
                 return allHandlers;
 
+            var regexPattern = $@"(^|\W){symbol.Name}($|\W)";
             var references = await SymbolFinder.FindReferencesAsync(symbol, _solution);
+
             foreach (var reference in references)
             {
                 foreach (var location in reference.Locations)
                 {
                     var tree = await location.Document.GetSyntaxTreeAsync();
                     var root = await tree.GetRootAsync();
-                    var regexPattern = $@"(^|\W){symbol.Name}($|\W)";
                     var allMethods = root.DescendantNodes().OfType<MethodDeclarationSyntax>();
                     var publicMethods = allMethods.Where(publicMethod =>
-                        publicMethod.Modifiers.Any(modifier => modifier.Text.Equals("public")) &&
+                        publicMethod.Modifiers.Any(modifier => modifier.IsKind(SyntaxKind.PublicKeyword)) &&
                         publicMethod.ParameterList.Parameters.Any(parameter => Regex.IsMatch(parameter.ToFullString(), regexPattern, RegexOptions.IgnoreCase | RegexOptions.Compiled)))
                         .OrderBy(m => m.ToFullString())
                         .ToList();
@@ -114,12 +113,15 @@ namespace HandlerLocator
                 }
             }
 
-            var longestPath = allHandlers.Max(h => h.DisplaySourceFile.Length);
-            allHandlers.ForEach(handler =>
+            if(allHandlers.Any())
             {
-                var neededSpaces = longestPath - handler.DisplaySourceFile.Length;
-                handler.Fill = new string(' ', neededSpaces + 1);
-            });
+                var longestPath = allHandlers.Max(h => h.DisplaySourceFile.Length);
+                allHandlers.ForEach(handler =>
+                {
+                    var neededSpaces = longestPath - handler.DisplaySourceFile.Length;
+                    handler.Fill = new string(' ', neededSpaces + 1);
+                });
+            }
 
             return allHandlers;
         }
@@ -133,6 +135,10 @@ namespace HandlerLocator
 
             if (syntaxNode is IdentifierNameSyntax identifierName)
             {
+                var foundType = semanticModel.GetTypeInfo(syntaxNode);
+                if (foundType.Type != null)
+                    return foundType.Type;
+
                 return semanticModel.GetTypeInfo(identifierName.Parent) is TypeInfo typeInfo && typeInfo.Type is null
                     ? semanticModel.GetTypeInfo(syntaxNode).Type
                     : typeInfo.Type;
@@ -146,6 +152,12 @@ namespace HandlerLocator
             if (syntaxNode is ConstructorDeclarationSyntax constructorDeclarationSyntax)
             {
                 return semanticModel.GetDeclaredSymbol(constructorDeclarationSyntax).ContainingType;
+            }
+
+            if(syntaxNode is ParameterSyntax parameterSyntax)
+            {
+                var typeInfo = semanticModel.GetDeclaredSymbol(parameterSyntax).Type;
+                return typeInfo;
             }
 
             return semanticModel.GetTypeInfo(syntaxNode).Type;
