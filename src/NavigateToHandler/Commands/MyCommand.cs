@@ -1,6 +1,5 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 using HandlerLocator;
 using Microsoft.CodeAnalysis;
 using Microsoft.VisualStudio.LanguageServices;
@@ -17,6 +16,8 @@ namespace NavigateToHandler
         // Oy vey
         protected override async Task ExecuteAsync(OleMenuCmdEventArgs e)
         {
+            // Initialize our pane
+            _pane ??= await VS.Windows.CreateOutputWindowPaneAsync(PANE_TITLE, lazyCreate: true);
 
             var workspace = await VS.GetMefServiceAsync<VisualStudioWorkspace>();
             if (workspace is null)
@@ -38,7 +39,7 @@ namespace NavigateToHandler
             // Get the position under the cursor
             int position = documentView.TextView.Selection.ActivePoint.Position.Position;
 
-            var locator = new FindHandlerLocator(workspace.CurrentSolution, roslynDocument, documentView.FilePath, position);
+            var locator = new FindHandlerLocator(workspace.CurrentSolution, roslynDocument, position);
             var allHandlers = await locator.FindAllHandlers();
             if (allHandlers is null || !allHandlers.Any())
             {
@@ -57,31 +58,38 @@ namespace NavigateToHandler
 
         private async Task DisplayNoLoveAsync()
         {
-            _pane ??= await VS.Windows.CreateOutputWindowPaneAsync(PANE_TITLE, lazyCreate: true);
             await _pane.ClearAsync();
-            await _pane.WriteLineAsync($"No public handlers exist for the type under the cursor in the current solution.");
+            await _pane.WriteLineAsync($"No public handlers found for the type under the cursor in the current solution.");
             await _pane.ActivateAsync();
         }
 
         private async Task DisplayHandlersInOutputPaneAsync(IEnumerable<IdentifiedHandler> allHandlers)
         {
-            _pane ??= await VS.Windows.CreateOutputWindowPaneAsync(PANE_TITLE, lazyCreate: true);
+            var message = $"Found {allHandlers.Count()} public methods that consume '{allHandlers.First().TypeToFind}':";
+            var underlines = new string('-', message.Length);
+
             await _pane.ClearAsync();
-            await _pane.WriteLineAsync($"Found {allHandlers.Count()} public methods that consume '{allHandlers.First().TypeToFind}':");
-            await _pane.WriteLineAsync($"Double-click the relevant line to open." + Environment.NewLine);
+
+            using var writer = await _pane.CreateOutputPaneTextWriterAsync();
+
+            await writer.WriteLineAsync(message);
+            await writer.WriteLineAsync(underlines);
+
             foreach ( var handler in allHandlers.OrderBy(h => h.SourceFile).ThenBy(h => h.TypeName).ThenBy(h => h.PublicMethod))
             {
-                await _pane.WriteLineAsync($"{handler.DisplaySourceFile}:{handler.Fill}{handler.TypeName}.{handler.PublicMethod}()");
+                await writer.WriteLineAsync($"{handler.DisplaySourceFile}:{handler.Fill}{handler.TypeName}.{handler.PublicMethod}()");
             }
+
+            await writer.WriteLineAsync(underlines);
+            await writer.WriteLineAsync($"Double-click the relevant line to open." + Environment.NewLine);
+
             await _pane.ActivateAsync();
         }
 
         private async Task DisplayHandlerAsync(IdentifiedHandler identifiedHandler)
         {
-            _pane ??= await VS.Windows.CreateOutputWindowPaneAsync(PANE_TITLE, lazyCreate: true);
             await _pane.ClearAsync();
             await _pane.WriteLineAsync($"Match found: {identifiedHandler.TypeName}.{identifiedHandler.PublicMethod}(), line: {identifiedHandler.LineNumber}, column: {identifiedHandler.Column}");
-            await _pane.ActivateAsync();
 
             var openedView = await VS.Documents.OpenAsync(identifiedHandler.SourceFile);
             openedView.TextView.Caret.MoveTo(new SnapshotPoint(openedView.TextBuffer.CurrentSnapshot, identifiedHandler.CaretPosition));
