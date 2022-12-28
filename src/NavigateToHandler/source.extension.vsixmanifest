@@ -3,19 +3,13 @@
     <Metadata>
         <Identity Id="digitaldias.NavigateToHandler.001" Version="0.9" Language="en-US" Publisher="digitaldias" />
         <DisplayName>Navigate to Handler</DisplayName>
-        <Description xml:space="preserve">Adds a command that allows you to navigate to public methods across the entire solution that consume the type under the cursor as a parameter. </Description>
+        <Description xml:space="preserve">Adds a command that allows you to navigate to public or protected methods across the entire solution that consume the type under the cursor as a parameter. </Description>
         <Icon>Resources\Icon.png</Icon>
         <PreviewImage>Resources\Icon.png</PreviewImage>
     </Metadata>
     <Installation>
-        <InstallationTarget Id="Microsoft.VisualStudio.Community" Version="[16.0, 18.0)">
+        <InstallationTarget Id="Microsoft.VisualStudio.Community" Version="[17.0, 18.0)">
             <ProductArchitecture>amd64</ProductArchitecture>
-        </InstallationTarget>
-        <InstallationTarget Version="[16.0,18.0)" Id="Microsoft.VisualStudio.Community">
-            <ProductArchitecture>x86</ProductArchitecture>
-        </InstallationTarget>
-        <InstallationTarget Version="[16.0,18.0)" Id="Microsoft.VisualStudio.Community">
-            <ProductArchitecture>arm64</ProductArchitecture>
         </InstallationTarget>
     </Installation>
     <Prerequisites>

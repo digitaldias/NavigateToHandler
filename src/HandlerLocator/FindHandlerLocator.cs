@@ -22,42 +22,6 @@ namespace HandlerLocator
             _linePosition = linePosition;
         }
 
-        public async Task<IdentifiedHandler> FindFirstHandler()
-        {
-            var syntaxRoot = await _workingDocument.GetSyntaxRootAsync();
-            var syntaxNode = syntaxRoot.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(_linePosition, 0), true, true);
-
-            // Get type information
-            var semanticModel = await _workingDocument.GetSemanticModelAsync();
-
-            var symbol = GetTypeInfo(semanticModel, syntaxNode);
-
-            var references = await SymbolFinder.FindReferencesAsync(symbol, _solution);
-            foreach (var reference in references)
-            {
-                foreach (var location in reference.Locations)
-                {
-                    var tree = await location.Document.GetSyntaxTreeAsync();
-                    var root = await tree.GetRootAsync();
-                    var allMethods = root.DescendantNodes().OfType<MethodDeclarationSyntax>();
-                    var publicMethods = allMethods.Where(publicMethod =>
-                        publicMethod.Modifiers.Any(modifier => modifier.IsKind(SyntaxKind.PublicKeyword)) &&
-                        publicMethod.ParameterList.Parameters.Any(parameter => parameter.ToFullString().Contains(symbol.Name)));
-
-                    if (!publicMethods.Any())
-                        continue;
-
-                    return new IdentifiedHandler
-                    {
-                        SourceFile = location.Document.FilePath,
-                        LineNumber = publicMethods.First().SpanStart
-                    };
-                }
-            }
-
-            return null;
-        }
-
         public async Task<IEnumerable<IdentifiedHandler>> FindAllHandlers()
         {
             var allHandlers = new List<IdentifiedHandler>();
@@ -82,7 +46,7 @@ namespace HandlerLocator
                     var root = await tree.GetRootAsync();
                     var allMethods = root.DescendantNodes().OfType<MethodDeclarationSyntax>();
                     var publicMethods = allMethods.Where(publicMethod =>
-                        publicMethod.Modifiers.Any(modifier => modifier.IsKind(SyntaxKind.PublicKeyword)) &&
+                        publicMethod.Modifiers.Any(modifier => modifier.IsKind(SyntaxKind.PublicKeyword) || modifier.IsKind(SyntaxKind.ProtectedKeyword)) &&
                         publicMethod.ParameterList.Parameters.Any(parameter => Regex.IsMatch(parameter.ToFullString(), regexPattern, RegexOptions.IgnoreCase | RegexOptions.Compiled)))
                         .OrderBy(m => m.ToFullString())
                         .ToList();
