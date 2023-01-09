@@ -19,15 +19,15 @@ namespace NavigateToHandler
             // Initialize our pane
             _pane ??= await VS.Windows.CreateOutputWindowPaneAsync(PANE_TITLE, lazyCreate: true);
 
-            var workspace = await VS.GetMefServiceAsync<VisualStudioWorkspace>();
+            VisualStudioWorkspace workspace = await VS.GetMefServiceAsync<VisualStudioWorkspace>();
             if (workspace is null)
                 return;
 
-            var documentView = await VS.Documents.GetActiveDocumentViewAsync();
+            DocumentView documentView = await VS.Documents.GetActiveDocumentViewAsync();
             if (documentView is null)
                 return;
 
-            var documentId = workspace.CurrentSolution.GetDocumentIdsWithFilePath(documentView.FilePath).FirstOrDefault();
+            DocumentId documentId = workspace.CurrentSolution.GetDocumentIdsWithFilePath(documentView.FilePath).FirstOrDefault();
             if (documentId is null)
             {
                 return;
@@ -39,15 +39,15 @@ namespace NavigateToHandler
             // Get the position under the cursor
             int position = documentView.TextView.Selection.ActivePoint.Position.Position;
 
-            var locator = new FindHandlerLocator(workspace.CurrentSolution, roslynDocument, position);
-            var allHandlers = await locator.FindAllHandlers();
+            FindHandlerLocator locator = new(workspace.CurrentSolution, roslynDocument, position);
+            IEnumerable<IdentifiedHandler> allHandlers = await locator.FindAllHandlers();
             if (allHandlers is null || !allHandlers.Any())
             {
                 await DisplayNoLoveAsync();
                 return;
             }
 
-            if(allHandlers.Count() == 1)
+            if (allHandlers.Count() == 1)
             {
                 await DisplayHandlerAsync(allHandlers.First());
                 return;
@@ -65,17 +65,17 @@ namespace NavigateToHandler
 
         private async Task DisplayHandlersInOutputPaneAsync(IEnumerable<IdentifiedHandler> allHandlers)
         {
-            var message = $"Found {allHandlers.Count()} public methods that consume '{allHandlers.First().TypeToFind}':";
-            var underlines = new string('-', message.Length);
+            string message = $"Found {allHandlers.Count()} public methods that consume '{allHandlers.First().TypeToFind}':";
+            string underlines = new('-', message.Length);
 
             await _pane.ClearAsync();
 
-            using var writer = await _pane.CreateOutputPaneTextWriterAsync();
+            using System.IO.TextWriter writer = await _pane.CreateOutputPaneTextWriterAsync();
 
             await writer.WriteLineAsync(message);
             await writer.WriteLineAsync(underlines);
 
-            foreach ( var handler in allHandlers.OrderBy(h => h.SourceFile).ThenBy(h => h.TypeName).ThenBy(h => h.PublicMethod))
+            foreach (IdentifiedHandler handler in allHandlers.OrderBy(h => h.SourceFile).ThenBy(h => h.TypeName).ThenBy(h => h.PublicMethod))
             {
                 await writer.WriteLineAsync($"{handler.DisplaySourceFile}:{handler.Fill}{handler.TypeName}.{handler.PublicMethod}()");
             }
@@ -91,7 +91,7 @@ namespace NavigateToHandler
             await _pane.ClearAsync();
             await _pane.WriteLineAsync($"Match found: {identifiedHandler.TypeName}.{identifiedHandler.PublicMethod}(), line: {identifiedHandler.LineNumber}, column: {identifiedHandler.Column}");
 
-            var openedView = await VS.Documents.OpenAsync(identifiedHandler.SourceFile);
+            DocumentView openedView = await VS.Documents.OpenAsync(identifiedHandler.SourceFile);
             openedView.TextView.Caret.MoveTo(new SnapshotPoint(openedView.TextBuffer.CurrentSnapshot, identifiedHandler.CaretPosition));
             openedView.TextView.Caret.EnsureVisible();
         }
