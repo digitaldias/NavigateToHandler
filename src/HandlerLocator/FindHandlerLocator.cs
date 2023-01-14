@@ -24,28 +24,28 @@ namespace HandlerLocator
 
         public async Task<IEnumerable<IdentifiedHandler>> FindAllHandlers()
         {
-            var allHandlers = new List<IdentifiedHandler>();
-            var syntaxRoot = await _workingDocument.GetSyntaxRootAsync();
-            var syntaxNode = syntaxRoot.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(_linePosition, 0), true, true);
+            List<IdentifiedHandler> allHandlers = new List<IdentifiedHandler>();
+            SyntaxNode syntaxRoot = await _workingDocument.GetSyntaxRootAsync();
+            SyntaxNode syntaxNode = syntaxRoot.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(_linePosition, 0), true, true);
 
             // Get type information
-            var semanticModel = await _workingDocument.GetSemanticModelAsync();
+            SemanticModel semanticModel = await _workingDocument.GetSemanticModelAsync();
 
-            var symbol = GetTypeInfo(semanticModel, syntaxNode);
+            ITypeSymbol symbol = GetTypeInfo(semanticModel, syntaxNode);
             if (symbol is null)
                 return allHandlers;
 
-            var regexPattern = $@"(^|\W){symbol.Name}($|\W)";
-            var references = await SymbolFinder.FindReferencesAsync(symbol, _solution);
+            string regexPattern = $@"(^|\W){symbol.Name}($|\W)";
+            IEnumerable<ReferencedSymbol> references = await SymbolFinder.FindReferencesAsync(symbol, _solution);
 
-            foreach (var reference in references)
+            foreach (ReferencedSymbol reference in references)
             {
-                foreach (var location in reference.Locations)
+                foreach (ReferenceLocation location in reference.Locations)
                 {
-                    var tree = await location.Document.GetSyntaxTreeAsync();
-                    var root = await tree.GetRootAsync();
-                    var allMethods = root.DescendantNodes().OfType<MethodDeclarationSyntax>();
-                    var publicMethods = allMethods.Where(publicMethod =>
+                    SyntaxTree tree = await location.Document.GetSyntaxTreeAsync();
+                    SyntaxNode root = await tree.GetRootAsync();
+                    IEnumerable<MethodDeclarationSyntax> allMethods = root.DescendantNodes().OfType<MethodDeclarationSyntax>();
+                    List<MethodDeclarationSyntax> publicMethods = allMethods.Where(publicMethod =>
                         publicMethod.Modifiers.Any(modifier => modifier.IsKind(SyntaxKind.PublicKeyword) || modifier.IsKind(SyntaxKind.ProtectedKeyword)) &&
                         publicMethod.ParameterList.Parameters.Any(parameter => Regex.IsMatch(parameter.ToFullString(), regexPattern, RegexOptions.IgnoreCase | RegexOptions.Compiled)))
                         .OrderBy(m => m.ToFullString())
@@ -54,13 +54,13 @@ namespace HandlerLocator
                     if (!publicMethods.Any())
                         continue;
 
-                    foreach(var method in publicMethods)
+                    foreach (MethodDeclarationSyntax method in publicMethods)
                     {
-                        var lineSpan = method.GetLocation().GetLineSpan();
-                        var candidate = new IdentifiedHandler
+                        FileLinePositionSpan lineSpan = method.GetLocation().GetLineSpan();
+                        IdentifiedHandler candidate = new IdentifiedHandler
                         {
                             TypeToFind = symbol.Name,
-                            TypeName  = location.Document.Name.Replace(".cs", ""),
+                            TypeName = location.Document.Name.Replace(".cs", ""),
                             PublicMethod = method.Identifier.ToFullString(),
                             SourceFile = lineSpan.Path,
                             DisplaySourceFile = $"{lineSpan.Path}({lineSpan.StartLinePosition.Line + 1},{lineSpan.StartLinePosition.Character + 1})",
@@ -77,12 +77,12 @@ namespace HandlerLocator
                 }
             }
 
-            if(allHandlers.Any())
+            if (allHandlers.Any())
             {
-                var longestPath = allHandlers.Max(h => h.DisplaySourceFile.Length);
+                int longestPath = allHandlers.Max(h => h.DisplaySourceFile.Length);
                 allHandlers.ForEach(handler =>
                 {
-                    var neededSpaces = longestPath - handler.DisplaySourceFile.Length;
+                    int neededSpaces = longestPath - handler.DisplaySourceFile.Length;
                     handler.Fill = new string(' ', neededSpaces + 1);
                 });
             }
@@ -99,7 +99,7 @@ namespace HandlerLocator
 
             if (syntaxNode is IdentifierNameSyntax identifierName)
             {
-                var foundType = semanticModel.GetTypeInfo(syntaxNode);
+                TypeInfo foundType = semanticModel.GetTypeInfo(syntaxNode);
                 if (foundType.Type != null)
                     return foundType.Type;
 
@@ -118,9 +118,9 @@ namespace HandlerLocator
                 return semanticModel.GetDeclaredSymbol(constructorDeclarationSyntax).ContainingType;
             }
 
-            if(syntaxNode is ParameterSyntax parameterSyntax)
+            if (syntaxNode is ParameterSyntax parameterSyntax)
             {
-                var typeInfo = semanticModel.GetDeclaredSymbol(parameterSyntax).Type;
+                ITypeSymbol typeInfo = semanticModel.GetDeclaredSymbol(parameterSyntax).Type;
                 return typeInfo;
             }
 
