@@ -1,37 +1,54 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <CommandTable xmlns="http://schemas.microsoft.com/VisualStudio/2005-10-18/CommandTable" xmlns:xs="http://www.w3.org/2001/XMLSchema">
 
-  <Extern href="stdidcmd.h"/>
-  <Extern href="vsshlids.h"/>
-  <Include href="KnownImageIds.vsct"/>
-  <Include href="VSGlobals.vsct"/>
+	<Extern href="stdidcmd.h"/>
+	<Extern href="vsshlids.h"/>
+	<Include href="KnownImageIds.vsct"/>
+	<Include href="VSGlobals.vsct"/>
 
-  <Commands package="NavigateToHandler">
-    <Groups>
-      <Group guid="NavigateToHandler" id="MyMenuGroup" priority="0x0600">
-        <Parent guid="VSMainMenu" id="Edit"/>
-      </Group>
-    </Groups>
+	<Commands package="NavigateToHandler">
+		<Groups>
 
-    <!--This section defines the elements the user can interact with, like a menu command or a button
+			<Group guid="NavigateToHandler" id="MyMenuGroup" priority="0x0600">
+				<Parent guid="VSMainMenu" id="Edit"/>
+			</Group>
+
+			<Group guid="NavigateToHandler" id="CodeWindowNavigationContextMenuGroup" priority="0x0600">
+				<Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_CODEWIN"/>
+			</Group>
+		</Groups>
+
+		<!--This section defines the elements the user can interact with, like a menu command or a button
         or combo box in a toolbar. -->
-    <Buttons>
-      <Button guid="NavigateToHandler" id="MyCommand" priority="0x0100" type="Button">
-        <Parent guid="NavigateToHandler" id="MyMenuGroup" />
-        <Icon guid="ImageCatalogGuid" id="SearchGo" />
-        <CommandFlag>IconIsMoniker</CommandFlag>
-        <Strings>
-          <ButtonText>Navigate to Handler</ButtonText>
-          <LocCanonicalName>.Edit.NavigateToHandler</LocCanonicalName>
-        </Strings>
-      </Button>
-    </Buttons>
-  </Commands>
+		<Buttons>
+			<Button guid="NavigateToHandler" id="MyCommand" priority="0x0100" type="Button">
+				<Parent guid="NavigateToHandler" id="MyMenuGroup" />
+				<Icon guid="ImageCatalogGuid" id="SearchGo" />
+				<CommandFlag>IconIsMoniker</CommandFlag>
+				<Strings>
+					<ButtonText>Navigate to Handler</ButtonText>
+					<LocCanonicalName>.Edit.NavigateToHandler</LocCanonicalName>
+				</Strings>
+			</Button>
 
-  <Symbols>
-    <GuidSymbol name="NavigateToHandler" value="{933984cc-44e5-4c35-a321-b8f628ec4425}">
-      <IDSymbol name="MyMenuGroup" value="0x0001" />
-      <IDSymbol name="MyCommand" value="0x0100" />
-    </GuidSymbol>
-  </Symbols>
+			<Button guid="NavigateToHandler" id="MyCommand" priority="0x0100" type="Button">
+				<Parent guid="NavigateToHandler" id="CodeWindowNavigationContextMenuGroup" />
+				<Icon guid="ImageCatalogGuid" id="SearchGo" />
+				<CommandFlag>IconIsMoniker</CommandFlag>
+				<Strings>
+					<ButtonText>Navigate to Handler</ButtonText>
+					<LocCanonicalName>.Edit.NavigateToHandler</LocCanonicalName>
+				</Strings>
+			</Button>
+
+		</Buttons>
+	</Commands>
+
+	<Symbols>
+		<GuidSymbol name="NavigateToHandler" value="{933984cc-44e5-4c35-a321-b8f628ec4425}">
+			<IDSymbol name="MyMenuGroup" value="0x0001" />
+			<IDSymbol name="CodeWindowNavigationContextMenuGroup" value="0x0002" />
+			<IDSymbol name="MyCommand" value="0x0100" />
+		</GuidSymbol>
+	</Symbols>
 </CommandTable>
