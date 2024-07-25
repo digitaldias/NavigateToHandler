@@ -17,5 +17,6 @@ namespace HandlerLocator
         public string Fill { get; set; }
         public string DisplaySourceFile { get; set; }
         public int CaretPosition { get; set; }
+        public string AsArgument { get; set; }
     }
 }

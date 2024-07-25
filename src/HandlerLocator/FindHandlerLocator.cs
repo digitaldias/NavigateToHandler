@@ -1,11 +1,9 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Microsoft.CodeAnalysis.FindSymbols;
 
 namespace HandlerLocator
 {
@@ -25,6 +23,10 @@ namespace HandlerLocator
         public async Task<IEnumerable<IdentifiedHandler>> FindAllHandlers()
         {
             List<IdentifiedHandler> allHandlers = new List<IdentifiedHandler>();
+            if (_workingDocument is null)
+            {
+                return new List<IdentifiedHandler>();
+            }
             SyntaxNode syntaxRoot = await _workingDocument.GetSyntaxRootAsync();
             SyntaxNode syntaxNode = syntaxRoot.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(_linePosition, 0), true, true);
 
@@ -35,56 +37,52 @@ namespace HandlerLocator
             if (symbol is null)
                 return allHandlers;
 
-            string regexPattern = $@"(^|\W){symbol.Name}($|\W)";
-            IEnumerable<ReferencedSymbol> references = await SymbolFinder.FindReferencesAsync(symbol, _solution);
+            var symbolName = symbol.ToDisplayString();
 
-            foreach (ReferencedSymbol reference in references)
+            foreach (var project in _solution.Projects)
             {
-                foreach (ReferenceLocation location in reference.Locations)
+                foreach (var document in project.Documents)
                 {
-                    SyntaxTree tree = await location.Document.GetSyntaxTreeAsync();
-                    SyntaxNode root = await tree.GetRootAsync();
-                    IEnumerable<MethodDeclarationSyntax> allMethods = root.DescendantNodes().OfType<MethodDeclarationSyntax>();
-                    List<MethodDeclarationSyntax> publicMethods = allMethods.Where(publicMethod =>
-                        publicMethod.Modifiers.Any(modifier => modifier.IsKind(SyntaxKind.PublicKeyword) || modifier.IsKind(SyntaxKind.ProtectedKeyword)) &&
-                        publicMethod.ParameterList.Parameters.Any(parameter => Regex.IsMatch(parameter.ToFullString(), regexPattern, RegexOptions.IgnoreCase | RegexOptions.Compiled)))
-                        .OrderBy(m => m.ToFullString())
-                        .ToList();
+                    SyntaxNode root = await document.GetSyntaxRootAsync();
+                    SemanticModel model = await document.GetSemanticModelAsync();
+                    var methodDeclarations = root.DescendantNodes()
+                                                 .OfType<MethodDeclarationSyntax>();
 
-                    if (!publicMethods.Any())
-                        continue;
-
-                    foreach (MethodDeclarationSyntax method in publicMethods)
+                    foreach (var method in methodDeclarations)
                     {
-                        FileLinePositionSpan lineSpan = method.GetLocation().GetLineSpan();
-                        IdentifiedHandler candidate = new IdentifiedHandler
+
+                        var parameters = method.ParameterList.Parameters;
+                        foreach (var parameter in parameters)
                         {
-                            TypeToFind = symbol.Name,
-                            TypeName = location.Document.Name.Replace(".cs", ""),
-                            PublicMethod = method.Identifier.ToFullString(),
-                            SourceFile = lineSpan.Path,
-                            DisplaySourceFile = $"{lineSpan.Path}({lineSpan.StartLinePosition.Line + 1},{lineSpan.StartLinePosition.Character + 1})",
-                            LineNumber = lineSpan.StartLinePosition.Line + 1,
-                            Column = lineSpan.StartLinePosition.Character + 1,
-                            CaretPosition = method.Span.Start
-                        };
+                            var parameterType = model.GetTypeInfo(parameter.Type).Type;
+                            if (parameterType != null && IsSymbolMatch(symbol, parameterType))
+                            {
+                                var accessibility = method.Modifiers;
+                                if (accessibility.Any(SyntaxKind.PublicKeyword) ||
+                                    accessibility.Any(SyntaxKind.ProtectedKeyword))
+                                {
+                                    var lineSpan = method.SyntaxTree.GetLineSpan(method.Span);
+                                    var argName = parameterType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
 
-                        if (allHandlers.Any(h => h.SourceFile == candidate.SourceFile && h.PublicMethod == candidate.PublicMethod && h.LineNumber == candidate.LineNumber))
-                            continue;
-
-                        allHandlers.Add(candidate);
+                                    // Add method to the handlers list
+                                    var identifiedHandler = new IdentifiedHandler
+                                    {
+                                        TypeToFind = symbol.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
+                                        TypeName = document.Name.Replace(".cs", ""),
+                                        AsArgument = argName,
+                                        PublicMethod = method.Identifier.ToFullString(),
+                                        SourceFile = document.FilePath,
+                                        DisplaySourceFile = $"{document.FilePath}({lineSpan.StartLinePosition.Line + 1},{lineSpan.StartLinePosition.Character + 1})",
+                                        LineNumber = lineSpan.StartLinePosition.Line + 1,
+                                        Column = lineSpan.StartLinePosition.Character + 1,
+                                        CaretPosition = method.Span.Start
+                                    };
+                                    allHandlers.Add(identifiedHandler);
+                                }
+                            }
+                        }
                     }
                 }
-            }
-
-            if (allHandlers.Any())
-            {
-                int longestPath = allHandlers.Max(h => h.DisplaySourceFile.Length);
-                allHandlers.ForEach(handler =>
-                {
-                    int neededSpaces = longestPath - handler.DisplaySourceFile.Length;
-                    handler.Fill = new string(' ', neededSpaces + 1);
-                });
             }
 
             return allHandlers;
@@ -92,9 +90,79 @@ namespace HandlerLocator
 
         private ITypeSymbol GetTypeInfo(SemanticModel semanticModel, SyntaxNode syntaxNode)
         {
+            if (syntaxNode is IdentifierNameSyntax identifierName)
+            {
+                TypeInfo foundType = semanticModel.GetTypeInfo(syntaxNode);
+                if (foundType.Type != null)
+                    return foundType.Type;
+
+                return semanticModel.GetTypeInfo(identifierName.Parent) is TypeInfo typeInfo && typeInfo.Type is null
+                    ? semanticModel.GetTypeInfo(syntaxNode).Type
+                    : typeInfo.Type;
+            }
+
+            if (syntaxNode is EnumDeclarationSyntax enumDeclaration)
+            {
+                return semanticModel.GetDeclaredSymbol(enumDeclaration);
+            }
+
             if (syntaxNode is VariableDeclaratorSyntax variableDeclarator)
             {
-                return semanticModel.GetTypeInfo(((VariableDeclarationSyntax) variableDeclarator.Parent).Type).Type;
+                return semanticModel.GetTypeInfo(((VariableDeclarationSyntax)variableDeclarator.Parent).Type).Type;
+            }
+
+            if (syntaxNode is TypeDeclarationSyntax typeDeclarationSyntax)
+            {
+                return semanticModel.GetDeclaredSymbol(typeDeclarationSyntax);
+            }
+
+            if (syntaxNode is ConstructorDeclarationSyntax constructorDeclarationSyntax)
+            {
+                return semanticModel.GetDeclaredSymbol(constructorDeclarationSyntax).ContainingType;
+            }
+
+            if (syntaxNode is ParameterSyntax parameterSyntax)
+            {
+                ITypeSymbol typeInfo = semanticModel.GetDeclaredSymbol(parameterSyntax).Type;
+                return typeInfo;
+            }
+
+            return semanticModel.GetTypeInfo(syntaxNode).Type;
+        }
+
+        private bool IsSymbolMatch(ITypeSymbol symbol, ITypeSymbol parameterType)
+        {
+            // Compare the original definitions
+            if (SymbolEqualityComparer.Default.Equals(symbol.OriginalDefinition, parameterType.OriginalDefinition))
+            {
+                return true;
+            }
+
+            if (symbol.OriginalDefinition.ToDisplayString() == parameterType.OriginalDefinition.ToDisplayString())
+            {
+                return true;
+            }
+
+            // Check if parameterType is a generic type and compare type arguments
+            if (parameterType is INamedTypeSymbol namedTypeSymbol && namedTypeSymbol.IsGenericType)
+            {
+                foreach (var typeArgument in namedTypeSymbol.TypeArguments)
+                {
+                    if (IsSymbolMatch(symbol, typeArgument))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        private ITypeSymbol GetTypeInfo_Old(SemanticModel semanticModel, SyntaxNode syntaxNode)
+        {
+            if (syntaxNode is VariableDeclaratorSyntax variableDeclarator)
+            {
+                return semanticModel.GetTypeInfo(((VariableDeclarationSyntax)variableDeclarator.Parent).Type).Type;
             }
 
             if (syntaxNode is IdentifierNameSyntax identifierName)
