@@ -55,6 +55,7 @@ namespace HandlerLocator
                         foreach (var parameter in parameters)
                         {
                             var parameterType = model.GetTypeInfo(parameter.Type).Type;
+
                             if (parameterType != null && IsSymbolMatch(symbol, parameterType))
                             {
                                 var accessibility = method.Modifiers;
@@ -132,7 +133,11 @@ namespace HandlerLocator
 
         private bool IsSymbolMatch(ITypeSymbol symbol, ITypeSymbol parameterType)
         {
-            // Compare the original definitions
+            if (ImplementsInterface(symbol, parameterType) || IsInherited(symbol, parameterType))
+            {
+                return true;
+            }
+
             if (SymbolEqualityComparer.Default.Equals(symbol.OriginalDefinition, parameterType.OriginalDefinition))
             {
                 return true;
@@ -155,6 +160,32 @@ namespace HandlerLocator
                 }
             }
 
+            return false;
+        }
+
+        private bool IsInherited(ITypeSymbol symbol, ITypeSymbol type)
+        {
+            ITypeSymbol current = type;
+            while (current != null)
+            {
+                if (SymbolEqualityComparer.Default.Equals(symbol.OriginalDefinition, current.OriginalDefinition))
+                {
+                    return true;
+                }
+                current = current.BaseType;
+            }
+            return false;
+        }
+
+        private bool ImplementsInterface(ITypeSymbol symbol, ITypeSymbol type)
+        {
+            foreach (var iface in type.AllInterfaces)
+            {
+                if (SymbolEqualityComparer.Default.Equals(symbol.OriginalDefinition, iface.OriginalDefinition))
+                {
+                    return true;
+                }
+            }
             return false;
         }
 

@@ -1,0 +1,26 @@
+Navigate to Handler
+by: digitaldias
+
+v1.3
+- Introduces Release Notes
+- Now also finds inherited types
+- Now also finds interface type implementations
+- If more than one result is found, the Output window is brought to focus
+
+v1.2
+- Fixes an issue where navigating from an unsupported document type in VS would cause the extension to stop responding
+- Adds support for finding enum types
+
+v1.1
+- Adds suport for finding generic types
+- Optimizes how the extension finds the handler
+
+v1.0
+- Adds the command to the code editor context menu
+
+v0.9
+- Include results from protected methods
+
+v0.8
+- Improves detection of public methods
+- Improves writing to output windows

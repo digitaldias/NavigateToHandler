@@ -3,6 +3,7 @@ using System.Linq;
 using HandlerLocator;
 using Microsoft.CodeAnalysis;
 using Microsoft.VisualStudio.LanguageServices;
+using Microsoft.VisualStudio.Shell.Interop;
 using Microsoft.VisualStudio.Text;
 
 namespace NavigateToHandler
@@ -10,7 +11,7 @@ namespace NavigateToHandler
     [Command(PackageIds.MyCommand)]
     internal sealed class MyCommand : BaseCommand<MyCommand>
     {
-        private const string PANE_TITLE = "Public Handler Results";
+        private const string PANE_TITLE = "Navigate to Handler";
         private OutputWindowPane _pane;
 
         // Oy vey
@@ -58,13 +59,18 @@ namespace NavigateToHandler
 
         private async Task DisplayNoLoveAsync()
         {
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+
             await _pane.ClearAsync();
-            await _pane.WriteLineAsync($"No public handlers found for the type under the cursor in the current solution.");
+            await _pane.WriteLineAsync($"No handlers found for the type under the cursor.");
             await _pane.ActivateAsync();
+            BringOutputWindowToFocus();
         }
 
         private async Task DisplayHandlersInOutputPaneAsync(IEnumerable<IdentifiedHandler> allHandlers)
         {
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+
             string message = $"Found {allHandlers.Count()} public methods that consume '{allHandlers.First().TypeToFind}':";
             string underlines = new('-', message.Length);
 
@@ -84,6 +90,25 @@ namespace NavigateToHandler
             await writer.WriteLineAsync($"Double-click the relevant line to open." + Environment.NewLine);
 
             await _pane.ActivateAsync();
+            BringOutputWindowToFocus();
+        }
+
+        private void BringOutputWindowToFocus()
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            IVsUIShell uiShell = VS.GetRequiredService<SVsUIShell, IVsUIShell>();
+            if (uiShell != null)
+            {
+                // CLSID of the output window
+                Guid clsidOutputWindow = new Guid(ToolWindowGuids.Outputwindow);
+                IVsWindowFrame windowFrame = null;
+                uiShell.FindToolWindow((uint)__VSFINDTOOLWIN.FTW_fForceCreate, ref clsidOutputWindow, out windowFrame);
+
+                if (windowFrame != null)
+                {
+                    windowFrame.Show();
+                }
+            }
         }
 
         private async Task DisplayHandlerAsync(IdentifiedHandler identifiedHandler)
