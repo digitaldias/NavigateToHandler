@@ -1,6 +1,11 @@
 Navigate to Handler
 by: digitaldias
 
+v1.4
+- Stabilize how generic types are found
+- Fixes an issue where the extension would not work in some cases
+- Performance improvements
+
 v1.3
 - Introduces Release Notes
 - Now also finds inherited types

@@ -11,14 +11,14 @@ namespace NavigateToHandler
     [Command(PackageIds.MyCommand)]
     internal sealed class MyCommand : BaseCommand<MyCommand>
     {
-        private const string PANE_TITLE = "Navigate to Handler";
+        private const string _paneTitle = "Navigate to Handler";
         private OutputWindowPane _pane;
 
         // Oy vey
         protected override async Task ExecuteAsync(OleMenuCmdEventArgs e)
         {
             // Initialize our pane
-            _pane ??= await VS.Windows.CreateOutputWindowPaneAsync(PANE_TITLE, lazyCreate: true);
+            _pane ??= await VS.Windows.CreateOutputWindowPaneAsync(_paneTitle, lazyCreate: true);
 
             VisualStudioWorkspace workspace = await VS.GetMefServiceAsync<VisualStudioWorkspace>();
             if (workspace is null)
@@ -81,9 +81,9 @@ namespace NavigateToHandler
             await writer.WriteLineAsync(message);
             await writer.WriteLineAsync(underlines);
 
-            foreach (IdentifiedHandler handler in allHandlers.OrderBy(h => h.SourceFile).ThenBy(h => h.TypeName).ThenBy(h => h.PublicMethod))
+            foreach (IdentifiedHandler handler in allHandlers.OrderBy(h => h.SourceFile).ThenBy(h => h.ClassName).ThenBy(h => h.MethodName))
             {
-                await writer.WriteLineAsync($"{handler.DisplaySourceFile}:{handler.Fill}{handler.TypeName}.{handler.PublicMethod}() as {handler.AsArgument}");
+                await writer.WriteLineAsync($"{handler.DisplaySourceFile}:{handler.Fill}{handler.ClassName}.{handler.MethodName}() as {handler.AsArgument}");
             }
 
             await writer.WriteLineAsync(underlines);
@@ -100,21 +100,24 @@ namespace NavigateToHandler
             if (uiShell != null)
             {
                 // CLSID of the output window
-                Guid clsidOutputWindow = new Guid(ToolWindowGuids.Outputwindow);
-                IVsWindowFrame windowFrame = null;
-                uiShell.FindToolWindow((uint)__VSFINDTOOLWIN.FTW_fForceCreate, ref clsidOutputWindow, out windowFrame);
+                Guid clsidOutputWindow = new(ToolWindowGuids.Outputwindow);
+                uiShell.FindToolWindow((uint)__VSFINDTOOLWIN.FTW_fForceCreate, ref clsidOutputWindow, out IVsWindowFrame windowFrame);
 
-                if (windowFrame != null)
-                {
-                    windowFrame.Show();
-                }
+                windowFrame?.Show();
             }
         }
 
         private async Task DisplayHandlerAsync(IdentifiedHandler identifiedHandler)
         {
             await _pane.ClearAsync();
-            await _pane.WriteLineAsync($"Match found: {identifiedHandler.TypeName}.{identifiedHandler.PublicMethod}(), line: {identifiedHandler.LineNumber}, column: {identifiedHandler.Column}");
+            if (identifiedHandler.AsArgument == identifiedHandler.TypeToFind)
+            {
+                await _pane.WriteLineAsync($"Found {identifiedHandler.TypeToFind} in {identifiedHandler.ClassName}.{identifiedHandler.MethodName}(), line: {identifiedHandler.LineNumber}, column: {identifiedHandler.Column}");
+            }
+            else
+            {
+                await _pane.WriteLineAsync($"Found {identifiedHandler.TypeToFind} as '{identifiedHandler.AsArgument}' in {identifiedHandler.ClassName}.{identifiedHandler.MethodName}() as {identifiedHandler.TypeToFind}, line: {identifiedHandler.LineNumber}, column: {identifiedHandler.Column}");
+            }
 
             DocumentView openedView = await VS.Documents.OpenAsync(identifiedHandler.SourceFile);
             openedView.TextView.Caret.MoveTo(new SnapshotPoint(openedView.TextBuffer.CurrentSnapshot, identifiedHandler.CaretPosition));

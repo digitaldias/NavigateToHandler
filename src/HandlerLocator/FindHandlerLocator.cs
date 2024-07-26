@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
@@ -22,7 +23,7 @@ namespace HandlerLocator
 
         public async Task<IEnumerable<IdentifiedHandler>> FindAllHandlers()
         {
-            List<IdentifiedHandler> allHandlers = new List<IdentifiedHandler>();
+            var allHandlers = new ConcurrentBag<IdentifiedHandler>();
             if (_workingDocument is null)
             {
                 return new List<IdentifiedHandler>();
@@ -30,27 +31,24 @@ namespace HandlerLocator
             SyntaxNode syntaxRoot = await _workingDocument.GetSyntaxRootAsync();
             SyntaxNode syntaxNode = syntaxRoot.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(_linePosition, 0), true, true);
 
-            // Get type information
+            // Get candidateType information
             SemanticModel semanticModel = await _workingDocument.GetSemanticModelAsync();
 
             ITypeSymbol symbol = GetTypeInfo(semanticModel, syntaxNode);
             if (symbol is null)
                 return allHandlers;
 
-            var symbolName = symbol.ToDisplayString();
-
-            foreach (var project in _solution.Projects)
+            Parallel.ForEach(_solution.Projects, project =>
             {
-                foreach (var document in project.Documents)
+                Parallel.ForEach(project.Documents, async document => //  (var document in project.Documents)
                 {
                     SyntaxNode root = await document.GetSyntaxRootAsync();
                     SemanticModel model = await document.GetSemanticModelAsync();
                     var methodDeclarations = root.DescendantNodes()
                                                  .OfType<MethodDeclarationSyntax>();
 
-                    foreach (var method in methodDeclarations)
+                    Parallel.ForEach(methodDeclarations, method =>
                     {
-
                         var parameters = method.ParameterList.Parameters;
                         foreach (var parameter in parameters)
                         {
@@ -59,19 +57,17 @@ namespace HandlerLocator
                             if (parameterType != null && IsSymbolMatch(symbol, parameterType))
                             {
                                 var accessibility = method.Modifiers;
-                                if (accessibility.Any(SyntaxKind.PublicKeyword) ||
-                                    accessibility.Any(SyntaxKind.ProtectedKeyword))
+                                if (accessibility.Any(SyntaxKind.PublicKeyword) || accessibility.Any(SyntaxKind.ProtectedKeyword))
                                 {
                                     var lineSpan = method.SyntaxTree.GetLineSpan(method.Span);
-                                    var argName = parameterType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
 
                                     // Add method to the handlers list
                                     var identifiedHandler = new IdentifiedHandler
                                     {
                                         TypeToFind = symbol.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
-                                        TypeName = document.Name.Replace(".cs", ""),
-                                        AsArgument = argName,
-                                        PublicMethod = method.Identifier.ToFullString(),
+                                        ClassName = document.Name.Replace(".cs", ""),
+                                        AsArgument = parameterType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
+                                        MethodName = method.Identifier.ToFullString(),
                                         SourceFile = document.FilePath,
                                         DisplaySourceFile = $"{document.FilePath}({lineSpan.StartLinePosition.Line + 1},{lineSpan.StartLinePosition.Character + 1})",
                                         LineNumber = lineSpan.StartLinePosition.Line + 1,
@@ -82,9 +78,9 @@ namespace HandlerLocator
                                 }
                             }
                         }
-                    }
-                }
-            }
+                    });
+                });
+            });
 
             return allHandlers;
         }
@@ -131,15 +127,27 @@ namespace HandlerLocator
             return semanticModel.GetTypeInfo(syntaxNode).Type;
         }
 
-        private bool IsSymbolMatch(ITypeSymbol symbol, ITypeSymbol parameterType)
+        private static bool IsSymbolMatch(ITypeSymbol symbol, ITypeSymbol parameterType)
         {
-            if (ImplementsInterface(symbol, parameterType) || IsInherited(symbol, parameterType))
+            if (IsInherited(symbol, parameterType))
             {
                 return true;
             }
 
-            if (SymbolEqualityComparer.Default.Equals(symbol.OriginalDefinition, parameterType.OriginalDefinition))
+            if (symbol is INamedTypeSymbol subject && parameterType.OriginalDefinition is INamedTypeSymbol item)
             {
+                if (AreEqual(subject, item.OriginalDefinition))
+                {
+                    return true;
+                }
+            }
+
+            if (AreEqual(symbol.OriginalDefinition, parameterType.OriginalDefinition))
+            {
+                if (IsGenericType(symbol.OriginalDefinition, out var _) || IsInterface(symbol.OriginalDefinition, out var _))
+                {
+                    return false;
+                }
                 return true;
             }
 
@@ -148,82 +156,200 @@ namespace HandlerLocator
                 return true;
             }
 
-            // Check if parameterType is a generic type and compare type arguments
-            if (parameterType is INamedTypeSymbol namedTypeSymbol && namedTypeSymbol.IsGenericType)
+            return false;
+        }
+
+        private static bool ArgumentsAreTheSame(INamedTypeSymbol left, INamedTypeSymbol right)
+        {
+            if (left.TypeArguments.Length != right.TypeArguments.Length)
+                return false;
+
+            bool AllMatch = true;
+            for (int i = 0; i < left.TypeArguments.Length; i++)
             {
-                foreach (var typeArgument in namedTypeSymbol.TypeArguments)
+                if (!SymbolEqualityComparer.Default.Equals(left.TypeArguments[i], right.TypeArguments[i]))
                 {
-                    if (IsSymbolMatch(symbol, typeArgument))
+                    AllMatch = false;
+                    break;
+                }
+            }
+            return AllMatch;
+        }
+
+        private static bool IsGenericType(ITypeSymbol symbol, out INamedTypeSymbol genericSymbol)
+        {
+            if (symbol is INamedTypeSymbol namedSymbol && namedSymbol.IsGenericType)
+            {
+                genericSymbol = namedSymbol;
+                return true;
+            }
+            genericSymbol = null;
+            return false;
+        }
+
+        private static bool IsInterface(ITypeSymbol symbol, out INamedTypeSymbol interfaceSymbol)
+        {
+            if (symbol is INamedTypeSymbol interfaceToMatch && interfaceToMatch.TypeKind == TypeKind.Interface)
+            {
+                interfaceSymbol = interfaceToMatch;
+                return true;
+            }
+            interfaceSymbol = null;
+            return false;
+        }
+
+        private static bool IsInherited(ITypeSymbol typeToMatch, ITypeSymbol candidateType)
+        {
+            // We are looking at a Generic candidateType
+            if (IsGenericType(typeToMatch, out var genericTypeToMatch))
+            {
+                if (AreEqual(typeToMatch.OriginalDefinition, candidateType.OriginalDefinition))
+                {
+                    if (IsGenericType(candidateType, out var genericCandidateType))
+                    {
+                        if (ArgumentsAreTheSame(genericTypeToMatch, genericCandidateType))
+                        {
+                            return true;
+                        }
+                        else if (SymbolEqualityComparer.Default.Equals(genericTypeToMatch, genericCandidateType))
+                        {
+                            if (ArgumentsAreTheSame(genericTypeToMatch, genericCandidateType))
+                            {
+                                return true;
+                            }
+                            return false;
+                        }
+                    }
+                }
+            }
+
+            // check if we're matching against an interface
+            if (IsInterface(typeToMatch, out var interfaceToMatch) && IsInterface(candidateType, out var candidateInterface))
+            {
+                // Check the tree on the candidate
+                if (ImplementsInterface(typeToMatch, candidateType))
+                {
+                    return true;
+                }
+                else if (AreEqual(interfaceToMatch, candidateInterface.OriginalDefinition))
+                {
+
+                }
+                else if (AreEqual(interfaceToMatch.OriginalDefinition, candidateInterface.OriginalDefinition))
+                {
+                    for (int i = 0; i < candidateInterface.AllInterfaces.Length; i++)
+                    {
+                        if (AreEqual(candidateInterface, interfaceToMatch))
+                        {
+                            if (ArgumentsAreTheSame(candidateInterface, interfaceToMatch))
+                            {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (typeToMatch is INamedTypeSymbol symbolToMatch && symbolToMatch.TypeKind is TypeKind.Class)
+            {
+                if (HasGenericArguments(symbolToMatch) && candidateType is INamedTypeSymbol strangeType)
+                {
+                    if (AreEqual(symbolToMatch.OriginalDefinition, strangeType.OriginalDefinition))
+                    {
+                        return ArgumentsAreTheSame(symbolToMatch, strangeType);
+                    }
+                }
+                var baseType = typeToMatch.BaseType;
+                while (baseType != null)
+                {
+                    if (baseType.SpecialType == SpecialType.System_Object)
+                    {
+                        return false;
+                    }
+
+                    if (SymbolEqualityComparer.Default.Equals(baseType, candidateType))
+                    {
+                        return true;
+                    }
+
+                    if (SymbolEqualityComparer.Default.Equals(baseType, candidateType.OriginalDefinition))
+                    {
+                        return true;
+                    }
+
+                    baseType = baseType.BaseType;
+                    if (baseType != null)
+                    {
+                        if ((baseType.TypeKind != TypeKind.Class && baseType.TypeKind != TypeKind.Interface) || baseType.BaseType == null)
+                        {
+                            break;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+        private static bool AreEqual(INamedTypeSymbol left, INamedTypeSymbol right)
+            => SymbolEqualityComparer.Default.Equals(left.WithNullableAnnotation(NullableAnnotation.NotAnnotated), right.WithNullableAnnotation(NullableAnnotation.NotAnnotated));
+
+        private static bool AreEqual(ITypeSymbol left, ITypeSymbol right)
+        {
+            if (left is null || right is null)
+            {
+                return false;
+            }
+
+            var nonNullableLeft = left.WithNullableAnnotation(NullableAnnotation.NotAnnotated);
+            var nonNullableRight = right.WithNullableAnnotation(NullableAnnotation.NotAnnotated);
+
+            return SymbolEqualityComparer.Default.Equals(x: nonNullableLeft, y: nonNullableRight);
+        }
+
+        private static bool HasGenericArguments(INamedTypeSymbol symbol)
+            => symbol.IsGenericType && symbol.TypeArguments.Length > 0;
+
+        private static bool ImplementsInterface(ITypeSymbol symbol, ITypeSymbol type)
+        {
+            if (IsInterface(type, out var candidate))
+            {
+                if (AreEqual(symbol, candidate))
+                {
+                    return true;
+                }
+                if (AreEqual(symbol.OriginalDefinition, candidate))
+                {
+
+                }
+                if (AreEqual(symbol.OriginalDefinition, candidate.OriginalDefinition))
+                {
+                    // If both are generic, compare candidateType arguments
+                    if (symbol is INamedTypeSymbol namedSymbol && candidate is INamedTypeSymbol namedIface)
+                    {
+                        if (namedSymbol.TypeArguments.Length == namedIface.TypeArguments.Length)
+                        {
+                            for (int i = 0; i < namedSymbol.TypeArguments.Length; i++)
+                            {
+                                if (symbol.TypeKind == TypeKind.Interface)
+                                {
+                                    return AreEqual(symbol.OriginalDefinition, candidate.OriginalDefinition);
+                                }
+
+                                if (!ArgumentsAreTheSame(namedSymbol, namedIface))
+                                {
+                                    return false;
+                                }
+                            }
+                            return true;
+                        }
+                    }
+                    else
                     {
                         return true;
                     }
                 }
             }
-
             return false;
-        }
-
-        private bool IsInherited(ITypeSymbol symbol, ITypeSymbol type)
-        {
-            ITypeSymbol current = type;
-            while (current != null)
-            {
-                if (SymbolEqualityComparer.Default.Equals(symbol.OriginalDefinition, current.OriginalDefinition))
-                {
-                    return true;
-                }
-                current = current.BaseType;
-            }
-            return false;
-        }
-
-        private bool ImplementsInterface(ITypeSymbol symbol, ITypeSymbol type)
-        {
-            foreach (var iface in type.AllInterfaces)
-            {
-                if (SymbolEqualityComparer.Default.Equals(symbol.OriginalDefinition, iface.OriginalDefinition))
-                {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        private ITypeSymbol GetTypeInfo_Old(SemanticModel semanticModel, SyntaxNode syntaxNode)
-        {
-            if (syntaxNode is VariableDeclaratorSyntax variableDeclarator)
-            {
-                return semanticModel.GetTypeInfo(((VariableDeclarationSyntax)variableDeclarator.Parent).Type).Type;
-            }
-
-            if (syntaxNode is IdentifierNameSyntax identifierName)
-            {
-                TypeInfo foundType = semanticModel.GetTypeInfo(syntaxNode);
-                if (foundType.Type != null)
-                    return foundType.Type;
-
-                return semanticModel.GetTypeInfo(identifierName.Parent) is TypeInfo typeInfo && typeInfo.Type is null
-                    ? semanticModel.GetTypeInfo(syntaxNode).Type
-                    : typeInfo.Type;
-            }
-
-            if (syntaxNode is TypeDeclarationSyntax typeDeclarationSyntax)
-            {
-                return semanticModel.GetDeclaredSymbol(typeDeclarationSyntax);
-            }
-
-            if (syntaxNode is ConstructorDeclarationSyntax constructorDeclarationSyntax)
-            {
-                return semanticModel.GetDeclaredSymbol(constructorDeclarationSyntax).ContainingType;
-            }
-
-            if (syntaxNode is ParameterSyntax parameterSyntax)
-            {
-                ITypeSymbol typeInfo = semanticModel.GetDeclaredSymbol(parameterSyntax).Type;
-                return typeInfo;
-            }
-
-            return semanticModel.GetTypeInfo(syntaxNode).Type;
         }
     }
 }
