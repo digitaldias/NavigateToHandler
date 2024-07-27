@@ -60,14 +60,17 @@ namespace HandlerLocator
                                 if (accessibility.Any(SyntaxKind.PublicKeyword) || accessibility.Any(SyntaxKind.ProtectedKeyword))
                                 {
                                     var lineSpan = method.SyntaxTree.GetLineSpan(method.Span);
+                                    var classDeclaration = method.AncestorsAndSelf()
+                                    .OfType<ClassDeclarationSyntax>()
+                                    .FirstOrDefault();
 
                                     // Add method to the handlers list
                                     var identifiedHandler = new IdentifiedHandler
                                     {
                                         TypeToFind = symbol.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
-                                        ClassName = document.Name.Replace(".cs", ""),
+                                        ClassName = classDeclaration.Identifier.Text ?? "Unknown",
                                         AsArgument = parameterType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
-                                        MethodName = method.Identifier.ToFullString(),
+                                        MethodName = method.Identifier.Text,
                                         SourceFile = document.FilePath,
                                         DisplaySourceFile = $"{document.FilePath}({lineSpan.StartLinePosition.Line + 1},{lineSpan.StartLinePosition.Character + 1})",
                                         LineNumber = lineSpan.StartLinePosition.Line + 1,
@@ -229,11 +232,7 @@ namespace HandlerLocator
                 // Check the tree on the candidate
                 if (ImplementsInterface(typeToMatch, candidateType))
                 {
-                    return true;
-                }
-                else if (AreEqual(interfaceToMatch, candidateInterface.OriginalDefinition))
-                {
-
+                    return ArgumentsAreTheSame(interfaceToMatch, candidateInterface);
                 }
                 else if (AreEqual(interfaceToMatch.OriginalDefinition, candidateInterface.OriginalDefinition))
                 {
@@ -246,6 +245,17 @@ namespace HandlerLocator
                                 return true;
                             }
                         }
+                    }
+                }
+            }
+
+            if (typeToMatch.Interfaces.Length > 0 && IsInterface(candidateType, out var ci))
+            {
+                for (int i = 0; i < typeToMatch.Interfaces.Length; i++)
+                {
+                    if (AreEqual(typeToMatch.Interfaces[i].OriginalDefinition, ci.OriginalDefinition))
+                    {
+                        return true;
                     }
                 }
             }
@@ -291,7 +301,13 @@ namespace HandlerLocator
         }
 
         private static bool AreEqual(INamedTypeSymbol left, INamedTypeSymbol right)
-            => SymbolEqualityComparer.Default.Equals(left.WithNullableAnnotation(NullableAnnotation.NotAnnotated), right.WithNullableAnnotation(NullableAnnotation.NotAnnotated));
+        {
+            if (left == null || right == null)
+            {
+                return false;
+            }
+            return SymbolEqualityComparer.Default.Equals(left.WithNullableAnnotation(NullableAnnotation.NotAnnotated), right.WithNullableAnnotation(NullableAnnotation.NotAnnotated));
+        }
 
         private static bool AreEqual(ITypeSymbol left, ITypeSymbol right)
         {

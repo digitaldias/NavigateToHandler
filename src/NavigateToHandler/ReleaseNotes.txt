@@ -1,6 +1,10 @@
 Navigate to Handler
 by: digitaldias
 
+v1.5
+- Now matches interfaces
+- Added null checks for improved robustness
+
 v1.4
 - Stabilize how generic types are found
 - Fixes an issue where the extension would not work in some cases
