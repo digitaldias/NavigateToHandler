@@ -60,15 +60,29 @@ namespace HandlerLocator
                                 if (accessibility.Any(SyntaxKind.PublicKeyword) || accessibility.Any(SyntaxKind.ProtectedKeyword))
                                 {
                                     var lineSpan = method.SyntaxTree.GetLineSpan(method.Span);
+                                    var className = "Unknown";
+                                    var classType = "Unknown";
                                     var classDeclaration = method.AncestorsAndSelf()
-                                    .OfType<ClassDeclarationSyntax>()
-                                    .FirstOrDefault();
+                                        .OfType<ClassDeclarationSyntax>()
+                                        .FirstOrDefault();
+
+                                    if (classDeclaration != null)
+                                    {
+                                        className = classDeclaration.Identifier.Text;
+                                        classType = "class";
+                                    }
+                                    else if (method.Parent is RecordDeclarationSyntax recordClass)
+                                    {
+                                        className = recordClass.Identifier.Text;
+                                        classType = "record";
+                                    }
 
                                     // Add method to the handlers list
                                     var identifiedHandler = new IdentifiedHandler
                                     {
                                         TypeToFind = symbol.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
-                                        ClassName = classDeclaration.Identifier.Text ?? "Unknown",
+                                        ClassName = classDeclaration?.Identifier.Text ?? "Unknown",
+                                        ClassType = classType,
                                         AsArgument = parameterType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
                                         MethodName = method.Identifier.Text,
                                         SourceFile = document.FilePath,
@@ -159,6 +173,24 @@ namespace HandlerLocator
                 return true;
             }
 
+            // Handle covariance
+            if (symbol is INamedTypeSymbol namedSymbol && parameterType is INamedTypeSymbol namedParameterType)
+            {
+                if (namedSymbol.IsGenericType && namedParameterType.IsGenericType)
+                {
+                    if (AreGenericTypesEqual(namedSymbol, namedParameterType))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            // Check if parameterType implements symbol
+            if (parameterType.AllInterfaces.Any(i => AreEqual(i, symbol)))
+            {
+                return true;
+            }
+
             return false;
         }
 
@@ -227,24 +259,35 @@ namespace HandlerLocator
             }
 
             // check if we're matching against an interface
-            if (IsInterface(typeToMatch, out var interfaceToMatch) && IsInterface(candidateType, out var candidateInterface))
+            if (IsInterface(typeToMatch, out var interfaceToMatch))
             {
-                // Check the tree on the candidate
-                if (ImplementsInterface(typeToMatch, candidateType))
+                if (IsInterface(candidateType, out var candidateInterface))
                 {
-                    return ArgumentsAreTheSame(interfaceToMatch, candidateInterface);
-                }
-                else if (AreEqual(interfaceToMatch.OriginalDefinition, candidateInterface.OriginalDefinition))
-                {
-                    for (int i = 0; i < candidateInterface.AllInterfaces.Length; i++)
+                    // Check the tree on the candidate
+                    if (ImplementsInterface(typeToMatch, candidateType))
                     {
-                        if (AreEqual(candidateInterface, interfaceToMatch))
+                        return ArgumentsAreTheSame(interfaceToMatch, candidateInterface);
+                    }
+                    else if (AreEqual(interfaceToMatch.OriginalDefinition, candidateInterface.OriginalDefinition))
+                    {
+                        for (int i = 0; i < candidateInterface.AllInterfaces.Length; i++)
                         {
-                            if (ArgumentsAreTheSame(candidateInterface, interfaceToMatch))
+                            if (AreEqual(candidateInterface, interfaceToMatch))
                             {
-                                return true;
+                                if (ArgumentsAreTheSame(candidateInterface, interfaceToMatch))
+                                {
+                                    return true;
+                                }
                             }
                         }
+                    }
+                }
+
+                if (candidateType is INamedTypeSymbol victim)
+                {
+                    if (ExistsAsDescendant(interfaceToMatch, victim))
+                    {
+                        return true;
                     }
                 }
             }
@@ -300,6 +343,118 @@ namespace HandlerLocator
             return false;
         }
 
+        private static bool ExistsAsDescendant(INamedTypeSymbol potentialParent, INamedTypeSymbol potentialChild)
+        {
+
+            if (potentialParent is null || potentialChild is null)
+                return false;
+
+            // Check in class inheritance
+            INamedTypeSymbol current = potentialChild.BaseType;
+            while (current != null)
+            {
+                if (SymbolEqualityComparer.Default.Equals(current, potentialParent))
+                {
+                    return true;
+                }
+                current = current.BaseType;
+            }
+
+            // Check in inhertited interfaces
+            foreach (var iface in potentialChild.AllInterfaces)
+            {
+                if (AreEqual(potentialParent, iface))
+                {
+                    return true;
+                }
+                else if (iface.IsGenericType && potentialParent.IsGenericType)
+                {
+                    if (AreGenericTypesEqual(potentialParent, iface))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        private static bool AreGenericTypesEqual(INamedTypeSymbol potentialParent, INamedTypeSymbol potentialChild)
+        {
+            if (SymbolEqualityComparer.Default.Equals(potentialParent.ConstructUnboundGenericType(), potentialChild.ConstructUnboundGenericType()))
+            {
+                for (int i = 0; i < potentialParent.TypeArguments.Length; i++)
+                {
+                    var parentArgument = potentialParent.TypeArguments[i];
+                    var childArgument = potentialChild.TypeArguments[i];
+
+                    // Handle covariance
+                    if (potentialParent.TypeParameters[i].Variance == VarianceKind.Out)
+                    {
+                        if (!SymbolEqualityComparer.Default.Equals(parentArgument, childArgument) &&
+                            !AreTypeArgumentsEqual(parentArgument, childArgument))
+                        {
+                            return false;
+                        }
+                    }
+                    else if (!SymbolEqualityComparer.Default.Equals(parentArgument, childArgument))
+                    {
+                        return false;
+                    }
+                }
+                return true;
+            }
+            return false;
+        }
+
+        private static bool AreTypeArgumentsEqual(ITypeSymbol parentArgument, ITypeSymbol childArgument)
+        {
+            // Direct equality check
+            if (SymbolEqualityComparer.Default.Equals(parentArgument, childArgument))
+            {
+                return true;
+            }
+
+            // Handle type parameter symbols
+            if (parentArgument is ITypeParameterSymbol parentTypeParam)
+            {
+                // Check if childArgument satisfies the constraints of parentTypeParam
+                foreach (var constraint in parentTypeParam.ConstraintTypes)
+                {
+                    if (AreTypeArgumentsEqual(constraint, childArgument))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            // Handle named type symbols recursively
+            if (parentArgument is INamedTypeSymbol parentNamed && childArgument is INamedTypeSymbol childNamed)
+            {
+                if (parentNamed.IsGenericType && childNamed.IsGenericType)
+                {
+                    return AreGenericTypesEqual(parentNamed, childNamed);
+                }
+
+                // Check all interfaces of the child type
+                foreach (var iface in childNamed.AllInterfaces)
+                {
+                    if (AreTypeArgumentsEqual(parentArgument, iface))
+                    {
+                        return true;
+                    }
+                }
+
+                // Check base type of the child
+                if (childNamed.BaseType != null && AreTypeArgumentsEqual(parentNamed, childNamed.BaseType))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         private static bool AreEqual(INamedTypeSymbol left, INamedTypeSymbol right)
         {
             if (left == null || right == null)
@@ -311,15 +466,7 @@ namespace HandlerLocator
 
         private static bool AreEqual(ITypeSymbol left, ITypeSymbol right)
         {
-            if (left is null || right is null)
-            {
-                return false;
-            }
-
-            var nonNullableLeft = left.WithNullableAnnotation(NullableAnnotation.NotAnnotated);
-            var nonNullableRight = right.WithNullableAnnotation(NullableAnnotation.NotAnnotated);
-
-            return SymbolEqualityComparer.Default.Equals(x: nonNullableLeft, y: nonNullableRight);
+            return SymbolEqualityComparer.Default.Equals(left, right);
         }
 
         private static bool HasGenericArguments(INamedTypeSymbol symbol)

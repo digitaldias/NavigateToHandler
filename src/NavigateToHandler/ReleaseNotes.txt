@@ -1,8 +1,15 @@
 Navigate to Handler
 by: digitaldias
 
+v1.6
+- Significantly improves on finding generic types. Does not work on covariant or contravariant types yet.
+
+If your interface is declared as ICommand<out TInput, out TOutput>, which is coviariant, the extension will not work, 
+but it will work if your cursor is over any types that implement it, like ICommand<string, int> or ICommand<Boat, Result<House>>.
+
+
 v1.5
-- Now matches interfaces
+- Now matches interfaces (only marker interfaces are supported)
 - Added null checks for improved robustness
 
 v1.4

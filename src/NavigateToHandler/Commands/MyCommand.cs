@@ -71,7 +71,7 @@ namespace NavigateToHandler
         {
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
 
-            string message = $"Found {allHandlers.Count()} public methods that consume '{allHandlers.First().TypeToFind}':";
+            string message = $"Found {allHandlers.Count()} public/protected methods that consume '{allHandlers.First().TypeToFind}':";
             string underlines = new('-', message.Length);
 
             await _pane.ClearAsync();
@@ -83,7 +83,7 @@ namespace NavigateToHandler
 
             foreach (IdentifiedHandler handler in allHandlers.OrderBy(h => h.SourceFile).ThenBy(h => h.ClassName).ThenBy(h => h.MethodName))
             {
-                await writer.WriteLineAsync($"{handler.DisplaySourceFile}:{handler.Fill}{handler.ClassName}.{handler.MethodName}() as {handler.AsArgument}");
+                await writer.WriteLineAsync($"{handler.DisplaySourceFile}:{handler.Fill} {handler.ClassType} {handler.ClassName}.{handler.MethodName}() as {handler.AsArgument}");
             }
 
             await writer.WriteLineAsync(underlines);
@@ -112,11 +112,11 @@ namespace NavigateToHandler
             await _pane.ClearAsync();
             if (identifiedHandler.AsArgument == identifiedHandler.TypeToFind)
             {
-                await _pane.WriteLineAsync($"Found {identifiedHandler.TypeToFind} in {identifiedHandler.ClassName}.{identifiedHandler.MethodName}(), line: {identifiedHandler.LineNumber}, column: {identifiedHandler.Column}");
+                await _pane.WriteLineAsync($"Found {identifiedHandler.TypeToFind} in {identifiedHandler.ClassType} {identifiedHandler.ClassName}.{identifiedHandler.MethodName}(), line: {identifiedHandler.LineNumber}, column: {identifiedHandler.Column}");
             }
             else
             {
-                await _pane.WriteLineAsync($"Found {identifiedHandler.TypeToFind} as '{identifiedHandler.AsArgument}' in {identifiedHandler.ClassName}.{identifiedHandler.MethodName}() as {identifiedHandler.TypeToFind}, line: {identifiedHandler.LineNumber}, column: {identifiedHandler.Column}");
+                await _pane.WriteLineAsync($"Found {identifiedHandler.TypeToFind} as '{identifiedHandler.AsArgument}' in {identifiedHandler.ClassType} {identifiedHandler.ClassName}.{identifiedHandler.MethodName}() as {identifiedHandler.TypeToFind}, line: {identifiedHandler.LineNumber}, column: {identifiedHandler.Column}");
             }
 
             DocumentView openedView = await VS.Documents.OpenAsync(identifiedHandler.SourceFile);
