@@ -27,6 +27,8 @@ public class IdentifiedHandlerViewModel : INotifyPropertyChanged
 
     public string CaretPosition => _handler.Column.ToString();
 
+    public string Position => $"({_handler.LineNumber},{_handler.Column})";
+
     public string AsArgument => _handler.AsArgument;
 
     public string ClassType => _handler.ClassType;

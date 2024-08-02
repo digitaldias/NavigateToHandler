@@ -21,7 +21,7 @@ namespace NavigateToHandler.Dialogs
         /// </summary>
         public DisplayResultsWindow() : base(null)
         {
-            this.Caption = "Navigate to Handler found multiple results";
+            this.Caption = "Navigate to Handler";
             this.Content = new DisplayResultsWindowControl();
         }
     }
