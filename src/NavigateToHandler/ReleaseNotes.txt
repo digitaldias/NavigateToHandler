@@ -1,6 +1,10 @@
 Navigate to Handler
 by: digitaldias
 
+v1.7
+- Now shows multiple results in a dialog window, allowing you to choose which one to navigate to
+This is a first iteration and will be improved in the future. Feedback is appreciated, either here or on GitHub.
+
 v1.6
 - Significantly improves on finding generic types. Does not work on covariant or contravariant types yet.
 

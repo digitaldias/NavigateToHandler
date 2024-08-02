@@ -21,16 +21,17 @@
             <Setter Property="Background" Value="{DynamicResource {x:Static vsshell:VsBrushes.ToolWindowBackgroundKey}}"/>
             <Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.ToolWindowTextKey}}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource {x:Static vsshell:VsBrushes.ToolWindowBorderKey}}"/>
+            <Setter Property="BorderThickness" Value="0" />
             <Setter Property="FontSize" Value="{DynamicResource {x:Static vsshell:VsFonts.EnvironmentFontSizeKey}}"/>
             <Setter Property="FontFamily" Value="{DynamicResource {x:Static vsshell:VsFonts.EnvironmentFontFamilyKey}}"/>
             <Setter Property="SelectionUnit" Value="FullRow"/>
         </Style>
 
         <Style TargetType="DataGridColumnHeader">
+            <Setter Property="Margin" Value="13" />
             <Setter Property="Background" Value="{DynamicResource {x:Static vsshell:VsBrushes.ToolWindowBackgroundKey}}"/>
-            <Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.ToolWindowTextKey}}"/>
+            <Setter Property="Foreground" Value="{DynamicResource {x:Static vsshell:VsBrushes.HighlightKey}}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource {x:Static vsshell:VsBrushes.ToolWindowBorderKey}}"/>
-            <Setter Property="FontWeight" Value="Bold"/>
             <Setter Property="FontSize" Value="{DynamicResource {x:Static vsshell:VsFonts.EnvironmentFontSizeKey}}"/>
             <Setter Property="FontFamily" Value="{DynamicResource {x:Static vsshell:VsFonts.EnvironmentFontFamilyKey}}"/>
         </Style>
@@ -49,6 +50,10 @@
             </Style.Triggers>
         </Style>
 
+        <Style TargetType="DataGridCell">
+            <Setter Property="Margin" Value="10 0 0 0" />
+        </Style>
+
         <Style x:Key="CenteredDataGridCellStyle" TargetType="DataGridCell">
             <Setter Property="HorizontalContentAlignment" Value="Right" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
@@ -64,9 +69,8 @@
             HorizontalAlignment="Stretch"
             VerticalAlignment="Stretch"
             HorizontalContentAlignment="Stretch"
-            GridLinesVisibility="All"                  
+            GridLinesVisibility="Horizontal"                  
             SelectionMode="Single"
-            SelectionUnit="FullRow"
             CanUserAddRows="False"
             CanUserDeleteRows="False"
             CanUserResizeColumns="True"
@@ -84,13 +88,11 @@
             FontSize="{DynamicResource {x:Static vsshell:VsFonts.EnvironmentFontSizeKey}}"
             FontFamily="{DynamicResource {x:Static vsshell:VsFonts.EnvironmentFontFamilyKey}}">
             <DataGrid.Columns>
-                <DataGridTextColumn Header="Type to find" Binding="{Binding Path=TypeToFind, Mode=OneWay}" Width="Auto" />
-                <DataGridTextColumn Header="Found in" Binding="{Binding Path=ClassName, Mode=OneWay}" Width="*" />
-                <DataGridTextColumn Header="Method Name" Binding="{Binding MethodName, Mode=OneWay}" Width="*" />
-                <DataGridTextColumn Header="Line Number" Binding="{Binding LineNumber, Mode=OneWay}" Width="Auto" CellStyle="{StaticResource CenteredDataGridCellStyle}" />
-                <DataGridTextColumn Header="Caret Position" Binding="{Binding CaretPosition, Mode=OneWay}"  Width="Auto" CellStyle="{StaticResource CenteredDataGridCellStyle}" />
-                <DataGridTextColumn Header="Type" Binding="{Binding ClassType, Mode=OneWay}"  Width="Auto"/>
-                <DataGridTextColumn Header="As" Binding="{Binding ArgumentName, Mode=OneWay}"  Width="*"/>
+                <DataGridTextColumn Header="Match" Binding="{Binding Path=TypeToFind, Mode=OneWay}" Width="Auto" />
+                <DataGridTextColumn Header="Class/Record" Binding="{Binding Path=ClassName, Mode=OneWay}" Width="Auto" />
+                <DataGridTextColumn Header="Method Name" Binding="{Binding MethodName, Mode=OneWay}" Width="Auto" />
+                <DataGridTextColumn Header="At" Binding="{Binding Path=Position, Mode=OneWay}" Width="Auto" CellStyle="{StaticResource CenteredDataGridCellStyle}" />
+                <DataGridTextColumn Header="Command type" Binding="{Binding ArgumentName, Mode=OneWay}"  Width="*"/>
             </DataGrid.Columns>
         </DataGrid>
         </Border>
