@@ -5,6 +5,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.VisualStudio.LanguageServices;
 using Microsoft.VisualStudio.Shell.Interop;
 using Microsoft.VisualStudio.Text;
+using NavigateToHandler.Dialogs;
 
 namespace NavigateToHandler
 {
@@ -71,6 +72,9 @@ namespace NavigateToHandler
         {
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
 
+            var firstOne = allHandlers.First();
+
+            await ShowHandlersInToolWindowAsync(allHandlers.ToList());
             string message = $"Found {allHandlers.Count()} public/protected methods that consume '{allHandlers.First().TypeToFind}':";
             string underlines = new('-', message.Length);
 
@@ -90,7 +94,26 @@ namespace NavigateToHandler
             await writer.WriteLineAsync($"Double-click the relevant line to open." + Environment.NewLine);
 
             await _pane.ActivateAsync();
-            BringOutputWindowToFocus();
+        }
+
+        private async Task ShowHandlersInToolWindowAsync(List<IdentifiedHandler> allHandlers)
+        {
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+
+            var window = await VS.Windows.ShowToolWindowAsync(Guid.Parse("5342cbfd-1e84-4ac6-b306-7997cdd59c0d"));
+            if (window != null)
+            {
+                // Get the ToolWindowPane from the IVsWindowFrame
+                if (window is IVsWindowFrame windowFrame)
+                {
+                    windowFrame.GetProperty((int)__VSFPROPID.VSFPROPID_DocView, out var docView);
+                    var toolWindowPane = docView as ToolWindowPane;
+                    if (toolWindowPane?.Content is DisplayResultsWindowControl control)
+                    {
+                        await control.PopulateListAsync(allHandlers);
+                    }
+                }
+            }
         }
 
         private void BringOutputWindowToFocus()
@@ -99,7 +122,7 @@ namespace NavigateToHandler
             IVsUIShell uiShell = VS.GetRequiredService<SVsUIShell, IVsUIShell>();
             if (uiShell != null)
             {
-                // CLSID of the output window
+                // CLSID of the output windowFrame
                 Guid clsidOutputWindow = new(ToolWindowGuids.Outputwindow);
                 uiShell.FindToolWindow((uint)__VSFINDTOOLWIN.FTW_fForceCreate, ref clsidOutputWindow, out IVsWindowFrame windowFrame);
 

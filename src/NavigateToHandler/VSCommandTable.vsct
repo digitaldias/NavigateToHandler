@@ -1,20 +1,20 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <CommandTable xmlns="http://schemas.microsoft.com/VisualStudio/2005-10-18/CommandTable" xmlns:xs="http://www.w3.org/2001/XMLSchema">
 
-	<Extern href="stdidcmd.h"/>
-	<Extern href="vsshlids.h"/>
-	<Include href="KnownImageIds.vsct"/>
-	<Include href="VSGlobals.vsct"/>
+	<Extern href="stdidcmd.h" />
+	<Extern href="vsshlids.h" />
+	<Include href="KnownImageIds.vsct" />
+	<Include href="VSGlobals.vsct" />
 
 	<Commands package="NavigateToHandler">
 		<Groups>
 
 			<Group guid="NavigateToHandler" id="MyMenuGroup" priority="0x0600">
-				<Parent guid="VSMainMenu" id="Edit"/>
+				<Parent guid="VSMainMenu" id="Edit" />
 			</Group>
 
 			<Group guid="NavigateToHandler" id="CodeWindowNavigationContextMenuGroup" priority="0x0600">
-				<Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_CODEWIN"/>
+				<Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_CODEWIN" />
 			</Group>
 		</Groups>
 
@@ -41,8 +41,18 @@
 				</Strings>
 			</Button>
 
-		</Buttons>
-	</Commands>
+		  <Button guid="guidNavigateToHandlerPackageCmdSet" id="cmdidDisplayResultsWindowCommand" priority="0x0100" type="Button">
+        <Parent guid="guidSHLMainMenu" id="IDG_VS_WNDO_OTRWNDWS1" />
+        <Icon guid="guidImages" id="bmpPic1" />
+        <Strings>
+          <ButtonText>DisplayResultsWindow</ButtonText>
+        </Strings>
+      </Button>
+    </Buttons>
+	  <Bitmaps>
+      <Bitmap guid="guidImages" href="Dialogs\Resources\DisplayResultsWindowCommand.png" usedList="bmpPic1, bmpPic2, bmpPicSearch, bmpPicX, bmpPicArrows, bmpPicStrikethrough" />
+    </Bitmaps>
+  </Commands>
 
 	<Symbols>
 		<GuidSymbol name="NavigateToHandler" value="{933984cc-44e5-4c35-a321-b8f628ec4425}">
@@ -50,5 +60,18 @@
 			<IDSymbol name="CodeWindowNavigationContextMenuGroup" value="0x0002" />
 			<IDSymbol name="MyCommand" value="0x0100" />
 		</GuidSymbol>
-	</Symbols>
+	
+    <GuidSymbol value="{51ecad3e-159f-478c-954f-339d7558bb96}" name="guidNavigateToHandlerPackageCmdSet">
+      <IDSymbol value="256" name="cmdidDisplayResultsWindowCommand" />
+    </GuidSymbol>
+  
+    <GuidSymbol value="{983db831-ddb1-4b84-88a6-aeb3cb0444a5}" name="guidImages">
+      <IDSymbol name="bmpPic1" value="1" />
+      <IDSymbol name="bmpPic2" value="2" />
+      <IDSymbol name="bmpPicSearch" value="3" />
+      <IDSymbol name="bmpPicX" value="4" />
+      <IDSymbol name="bmpPicArrows" value="5" />
+      <IDSymbol name="bmpPicStrikethrough" value="6" />
+    </GuidSymbol>
+  </Symbols>
 </CommandTable>
