@@ -1,6 +1,11 @@
 Navigate to Handler
 by: digitaldias
 
+v1.8
+- Improves on generic types (probably not perfect yet, but the weekend is only so long)
+- Slight performance improvements
+- Slight visual improvement in the tool window (not dialog window as previously mentioned in v1.7)
+
 v1.7
 - Now shows multiple results in a dialog window, allowing you to choose which one to navigate to
 This is a first iteration and will be improved in the future. Feedback is appreciated, either here or on GitHub.

@@ -1,13 +1,12 @@
 ﻿using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.ComponentModel;
 using System.Windows.Controls;
 using HandlerLocator;
 using Microsoft.VisualStudio.Shell.Interop;
 
 namespace NavigateToHandler.Dialogs;
 
-public class IdentifiedHandlerViewModel : INotifyPropertyChanged
+public class IdentifiedHandlerViewModel
 {
     private readonly IdentifiedHandler _handler;
 
@@ -34,8 +33,6 @@ public class IdentifiedHandlerViewModel : INotifyPropertyChanged
     public string ClassType => _handler.ClassType;
 
     public string ArgumentName => _handler.AsArgument;
-
-    public event PropertyChangedEventHandler PropertyChanged;
 }
 
 /// <summary>
@@ -77,6 +74,7 @@ public partial class DisplayResultsWindowControl : UserControl
             try
             {
                 await OpenFileAtPositionAsync(selectedItem.BackingClass.SourceFile, selectedItem.BackingClass.LineNumber, selectedItem.BackingClass.CaretPosition);
+                ItemsToShow.SelectedValue = null;
             }
             catch (Exception ex)
             {
