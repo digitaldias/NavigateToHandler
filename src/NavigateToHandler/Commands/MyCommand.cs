@@ -92,8 +92,6 @@ namespace NavigateToHandler
 
             await writer.WriteLineAsync(underlines);
             await writer.WriteLineAsync($"Double-click the relevant line to open." + Environment.NewLine);
-
-            await _pane.ActivateAsync();
         }
 
         private async Task ShowHandlersInToolWindowAsync(List<IdentifiedHandler> allHandlers)
