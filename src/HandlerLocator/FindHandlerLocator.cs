@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.FindSymbols;
 
 namespace HandlerLocator
 {
@@ -41,6 +42,8 @@ namespace HandlerLocator
             if (symbol is null)
                 return allHandlers;
 
+            ISymbol symbolDefinition = await SymbolFinder.FindSourceDefinitionAsync(symbol, _solution);
+
             Parallel.ForEach(_solution.Projects, project =>
             {
                 Parallel.ForEach(project.Documents, async document => //  (var document in project.Documents)
@@ -50,14 +53,14 @@ namespace HandlerLocator
                     var methodDeclarations = root.DescendantNodes()
                                                  .OfType<MethodDeclarationSyntax>();
 
-                    Parallel.ForEach(methodDeclarations, method =>
+                    Parallel.ForEach(methodDeclarations, async method =>
                     {
                         var parameters = method.ParameterList.Parameters;
                         foreach (var parameter in parameters)
                         {
                             var parameterType = model.GetTypeInfo(parameter.Type).Type;
 
-                            if (parameterType != null && IsSymbolMatch(symbol, parameterType))
+                            if (parameterType != null && await IsSymbolMatch(symbol, symbolDefinition, parameterType))
                             {
                                 var lineSpan = method.SyntaxTree.GetLineSpan(method.Span);
                                 var className = "Unknown";
@@ -218,16 +221,16 @@ namespace HandlerLocator
             return semanticModel.GetTypeInfo(syntaxNode).Type;
         }
 
-        private static bool IsSymbolMatch(ITypeSymbol symbol, ITypeSymbol parameterType)
+        private async Task<bool> IsSymbolMatch(ITypeSymbol symbol, ISymbol symbolDefinition, ITypeSymbol parameterType)
         {
             if (IsInherited(symbol, parameterType) && symbol.TypeKind != TypeKind.Interface)
             {
                 return true;
             }
 
-            if (symbol is INamedTypeSymbol subject && parameterType.OriginalDefinition is INamedTypeSymbol item)
+            if (symbolDefinition is INamedTypeSymbol subject && await SymbolFinder.FindSourceDefinitionAsync(parameterType, _solution) is INamedTypeSymbol item)
             {
-                if (AreEqual(subject, item.OriginalDefinition))
+                if (AreEqual(subject, item))
                 {
                     return true;
                 }
