@@ -91,6 +91,7 @@
                 <DataGridTextColumn Header="Match" Binding="{Binding Path=TypeToFind, Mode=OneWay}" Width="Auto" />
                 <DataGridTextColumn Header="Class/Record" Binding="{Binding Path=ClassName, Mode=OneWay}" Width="Auto" />
                 <DataGridTextColumn Header="Method Name" Binding="{Binding MethodName, Mode=OneWay}" Width="Auto" />
+                <DataGridTextColumn Header="Access" Binding="{Binding MethodAccess, Mode=OneWay}" Width="Auto" />
                 <DataGridTextColumn Header="At" Binding="{Binding Path=Position, Mode=OneWay}" Width="Auto" CellStyle="{StaticResource CenteredDataGridCellStyle}" />
                 <DataGridTextColumn Header="Command type" Binding="{Binding ArgumentName, Mode=OneWay}"  Width="*"/>
             </DataGrid.Columns>

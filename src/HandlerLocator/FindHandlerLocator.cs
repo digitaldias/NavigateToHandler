@@ -80,6 +80,12 @@ namespace HandlerLocator
                                     classType = "record";
                                 }
 
+                                var methodAccess = GetMethodAccess(method);
+                                if (methodAccess == "private" || methodAccess == "unknown")
+                                {
+                                    continue;
+                                }
+
                                 // Add method to the handlers list
                                 var identifiedHandler = new IdentifiedHandler
                                 {
@@ -87,7 +93,8 @@ namespace HandlerLocator
                                     ClassName = classDeclaration?.Identifier.Text ?? "Unknown",
                                     ClassType = classType,
                                     AsArgument = GetDisplayNameFor(parameterType),
-                                    MethodName = method.Identifier.Text,
+                                    MethodName = method.Identifier.Text + "(...)",
+                                    MethodAccess = methodAccess,
                                     SourceFile = document.FilePath,
                                     DisplaySourceFile = $"{document.FilePath}({lineSpan.StartLinePosition.Line + 1},{lineSpan.StartLinePosition.Character + 1})",
                                     LineNumber = lineSpan.StartLinePosition.Line + 1,
@@ -104,6 +111,28 @@ namespace HandlerLocator
             return allHandlers;
         }
 
+        private static string GetMethodAccess(MethodDeclarationSyntax method)
+        {
+            var modifiers = method.Modifiers;
+            if (modifiers.Any(m => m.IsKind(SyntaxKind.PublicKeyword)))
+            {
+                return "public";
+            }
+            if (modifiers.Any(m => m.IsKind(SyntaxKind.ProtectedKeyword)))
+            {
+                return "protected";
+            }
+            if (modifiers.Any(m => m.IsKind(SyntaxKind.InternalKeyword)))
+            {
+                return "internal";
+            }
+            if (modifiers.Any(m => m.IsKind(SyntaxKind.PrivateKeyword)))
+            {
+                return "private";
+            }
+            return "unknown";
+        }
+
         private string GetDisplayNameFor(ITypeSymbol parameterSymbol)
         {
             var builder = new StringBuilder(parameterSymbol.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat));
@@ -118,16 +147,14 @@ namespace HandlerLocator
         {
             if (IsBuiltInType(symbol))
             {
-                builder.Append(" (as ");
+                builder.Append(" as ");
                 builder.Append(Enum.GetName(typeof(SpecialType), symbol.SpecialType));
-                builder.Append(')');
             }
             if (symbol.BaseType != null && symbol.BaseType.IsGenericType)
             {
                 var baseType = symbol.BaseType;
-                builder.Append(" (as ");
+                builder.Append(" as ");
                 AppendTypeDisplay(baseType, builder);
-                builder.Append(')');
             }
         }
 
@@ -264,34 +291,10 @@ namespace HandlerLocator
             return AllMatch;
         }
 
-        private static bool IsGenericType(ITypeSymbol symbol, out INamedTypeSymbol genericSymbol)
-        {
-            if (symbol is INamedTypeSymbol namedSymbol && namedSymbol.IsGenericType)
-            {
-                genericSymbol = namedSymbol;
-                return true;
-            }
-            genericSymbol = null;
-            return false;
-        }
-
-        private static bool IsInterface(ITypeSymbol symbol, out INamedTypeSymbol interfaceSymbol)
-        {
-            if (symbol is INamedTypeSymbol interfaceToMatch && interfaceToMatch.TypeKind == TypeKind.Interface)
-            {
-                interfaceSymbol = interfaceToMatch;
-                return true;
-            }
-            interfaceSymbol = null;
-            return false;
-        }
-
         private static bool IsInherited(ITypeSymbol typeToMatch, ITypeSymbol candidateType)
         {
             if (candidateType.SpecialType != SpecialType.None)
                 return false;
-            //if (typeToMatch.TypeKind != candidateType.TypeKind)
-            //    return false;
 
             if (typeToMatch is INamedTypeSymbol == false || candidateType is INamedTypeSymbol == false)
                 return false;
@@ -337,42 +340,6 @@ namespace HandlerLocator
                     }
                 }
             }
-            return false;
-        }
-
-        private static bool ExistsAsDescendant(INamedTypeSymbol potentialParent, INamedTypeSymbol potentialChild)
-        {
-
-            if (potentialParent is null || potentialChild is null)
-                return false;
-
-            // Check in class inheritance
-            INamedTypeSymbol current = potentialChild.BaseType;
-            while (current != null)
-            {
-                if (SymbolEqualityComparer.Default.Equals(current, potentialParent))
-                {
-                    return true;
-                }
-                current = current.BaseType;
-            }
-
-            // Check in inhertited interfaces
-            foreach (var iface in potentialChild.AllInterfaces)
-            {
-                if (AreEqual(potentialParent, iface))
-                {
-                    return true;
-                }
-                else if (iface.IsGenericType && potentialParent.IsGenericType)
-                {
-                    if (AreGenericTypesEqual(potentialParent, iface))
-                    {
-                        return true;
-                    }
-                }
-            }
-
             return false;
         }
 
@@ -466,9 +433,6 @@ namespace HandlerLocator
             return SymbolEqualityComparer.Default.Equals(left, right);
         }
 
-        private static bool HasGenericArguments(INamedTypeSymbol symbol)
-            => symbol.IsGenericType && symbol.TypeArguments.Length > 0;
-
         private static bool ImplementsInterface(INamedTypeSymbol left, INamedTypeSymbol right)
         {
             // Check if 'right' is an interface
@@ -535,9 +499,9 @@ namespace HandlerLocator
                         {
                             return true;
                         }
-                        foreach (var rightIterface in implementedTypeArguments[i].BaseType.AllInterfaces)
+                        foreach (var rightInterface in implementedTypeArguments[i].BaseType.AllInterfaces)
                         {
-                            if (TypeArgumentsMatch(left, rightIterface))
+                            if (TypeArgumentsMatch(left, rightInterface))
                             {
                                 return true;
                             }
