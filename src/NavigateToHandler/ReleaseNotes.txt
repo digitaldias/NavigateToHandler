@@ -1,6 +1,16 @@
 Navigate to Handler
 by: digitaldias
 
+contributions by: Giorgi
+
+v1.9
+- (by Giorgi) Fixes an issue where not all symbols were found in some cases
+- Removes private methods from the search results
+- Adds Method Access to the search results (protected, internal, public)
+- Removes the parentheses from the "as" column in the search results
+- Adds (...) behind each method name in search results to better indicate that it is a method
+- Updates nuget package references
+
 v1.8
 - Improves on generic types (probably not perfect yet, but the weekend is only so long)
 - Slight performance improvements
