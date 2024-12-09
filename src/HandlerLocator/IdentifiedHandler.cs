@@ -13,6 +13,8 @@ namespace HandlerLocator
 
         public int LineNumber { get; set; }
 
+        public int EndLineNumber { get; set; }
+
         public string MethodName { get; set; }
 
         public string MethodAccess { get; set; }
