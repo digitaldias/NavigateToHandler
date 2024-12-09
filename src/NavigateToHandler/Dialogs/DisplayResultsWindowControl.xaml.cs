@@ -22,6 +22,8 @@ public class IdentifiedHandlerViewModel
 
     public string MethodName => _handler.MethodName;
 
+    public string MethodAccess => _handler.MethodAccess;
+
     public string LineNumber => _handler.LineNumber.ToString();
 
     public string CaretPosition => _handler.Column.ToString();
