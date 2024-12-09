@@ -2,6 +2,7 @@
 using System.Linq;
 using HandlerLocator;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.Text;
 using Microsoft.VisualStudio.LanguageServices;
 using Microsoft.VisualStudio.Shell.Interop;
 using Microsoft.VisualStudio.Text;
@@ -42,16 +43,34 @@ namespace NavigateToHandler
             int position = documentView.TextView.Selection.ActivePoint.Position.Position;
 
             FindHandlerLocator locator = new(workspace.CurrentSolution, roslynDocument, position);
-            IEnumerable<IdentifiedHandler> allHandlers = await locator.FindAllHandlers();
+            List<IdentifiedHandler> allHandlers = (await locator.FindAllHandlers())?.ToList();
+
             if (allHandlers is null || !allHandlers.Any())
             {
                 await DisplayNoLoveAsync();
                 return;
             }
 
-            if (allHandlers.Count() == 1)
+            if (allHandlers.Count == 1)
             {
                 await DisplayHandlerAsync(allHandlers.First());
+                return;
+            }
+
+            if (allHandlers.Count == 2)
+            {
+                SourceText sourceText = await roslynDocument.GetTextAsync();
+                int lineNumber = sourceText.Lines.GetLineFromPosition(position).LineNumber + 1;
+
+                var handler = allHandlers.FirstOrDefault(handler =>
+                {
+                    // If the handler is in the same file as the current document and contains the line search start position, skip it
+                    if (handler.SourceFile != documentView.FilePath) return true;
+
+                    return handler.LineNumber > lineNumber || handler.EndLineNumber < lineNumber;
+                });
+
+                await DisplayHandlerAsync(handler);
                 return;
             }
 
