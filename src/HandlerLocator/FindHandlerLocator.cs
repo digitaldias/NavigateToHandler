@@ -1,14 +1,14 @@
-﻿using System;
+﻿using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.FindSymbols;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Microsoft.CodeAnalysis.FindSymbols;
 
 namespace HandlerLocator
 {
@@ -27,6 +27,18 @@ namespace HandlerLocator
 
         public async Task<IEnumerable<IdentifiedHandler>> FindAllHandlers()
         {
+            try
+            {
+                return await FindAllHandlersTask();
+            }
+            catch (Exception exception)
+            {
+                return new List<IdentifiedHandler>();
+            }
+        }
+
+        public async Task<IEnumerable<IdentifiedHandler>> FindAllHandlersTask()
+        {
             var allHandlers = new ConcurrentBag<IdentifiedHandler>();
             if (_workingDocument is null)
             {
@@ -44,7 +56,7 @@ namespace HandlerLocator
 
             ISymbol symbolDefinition = await SymbolFinder.FindSourceDefinitionAsync(symbol, _solution);
 
-            Parallel.ForEach(_solution.Projects, project =>
+            Parallel.ForEach(_solution.Projects, project => //  (var project in _solution.Projects)
             {
                 Parallel.ForEach(project.Documents, async document => //  (var document in project.Documents)
                 {
@@ -80,8 +92,9 @@ namespace HandlerLocator
                                     classType = "record";
                                 }
 
+                                // Checking Access Modifier
                                 var methodAccess = GetMethodAccess(method);
-                                if (methodAccess == "private" || methodAccess == "unknown")
+                                if (methodAccess == "private" || methodAccess == "file" || methodAccess == "unknown")
                                 {
                                     continue;
                                 }
@@ -129,6 +142,10 @@ namespace HandlerLocator
             if (modifiers.Any(m => m.IsKind(SyntaxKind.PrivateKeyword)))
             {
                 return "private";
+            }
+            if (modifiers.Any(m => m.IsKind(SyntaxKind.FileKeyword)))
+            {
+                return "file";
             }
             return "unknown";
         }
@@ -296,7 +313,7 @@ namespace HandlerLocator
             if (candidateType.SpecialType != SpecialType.None)
                 return false;
 
-            if (typeToMatch is INamedTypeSymbol == false || candidateType is INamedTypeSymbol == false)
+            if ((typeToMatch is INamedTypeSymbol) == false || (candidateType is INamedTypeSymbol) == false)
                 return false;
 
             var leftSide = typeToMatch as INamedTypeSymbol;
