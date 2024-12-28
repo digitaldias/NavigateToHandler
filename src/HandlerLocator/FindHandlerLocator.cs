@@ -27,6 +27,18 @@ namespace HandlerLocator
 
         public async Task<IEnumerable<IdentifiedHandler>> FindAllHandlers()
         {
+            try
+            {
+                return await FindAllHandlersTask();
+            }
+            catch (Exception exception)
+            {
+                return new List<IdentifiedHandler>();
+            }
+        }
+
+        public async Task<IEnumerable<IdentifiedHandler>> FindAllHandlersTask()
+        {
             var allHandlers = new ConcurrentBag<IdentifiedHandler>();
             if (_workingDocument is null)
             {
