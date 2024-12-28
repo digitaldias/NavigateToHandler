@@ -1,14 +1,14 @@
-﻿using System;
+﻿using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.FindSymbols;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Microsoft.CodeAnalysis.FindSymbols;
 
 namespace HandlerLocator
 {
@@ -81,7 +81,7 @@ namespace HandlerLocator
                                 }
 
                                 var methodAccess = GetMethodAccess(method);
-                                if (methodAccess == "private" || methodAccess == "unknown")
+                                if (methodAccess == "private" || methodAccess == "file" || methodAccess == "unknown")
                                 {
                                     continue;
                                 }
@@ -129,6 +129,10 @@ namespace HandlerLocator
             if (modifiers.Any(m => m.IsKind(SyntaxKind.PrivateKeyword)))
             {
                 return "private";
+            }
+            if (modifiers.Any(m => m.IsKind(SyntaxKind.FileKeyword)))
+            {
+                return "file";
             }
             return "unknown";
         }
@@ -296,7 +300,7 @@ namespace HandlerLocator
             if (candidateType.SpecialType != SpecialType.None)
                 return false;
 
-            if (typeToMatch is INamedTypeSymbol == false || candidateType is INamedTypeSymbol == false)
+            if ((typeToMatch is INamedTypeSymbol) == false || (candidateType is INamedTypeSymbol) == false)
                 return false;
 
             var leftSide = typeToMatch as INamedTypeSymbol;
