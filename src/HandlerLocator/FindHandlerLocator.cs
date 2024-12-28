@@ -56,7 +56,7 @@ namespace HandlerLocator
 
             ISymbol symbolDefinition = await SymbolFinder.FindSourceDefinitionAsync(symbol, _solution);
 
-            Parallel.ForEach(_solution.Projects, project =>
+            Parallel.ForEach(_solution.Projects, project => //  (var project in _solution.Projects)
             {
                 Parallel.ForEach(project.Documents, async document => //  (var document in project.Documents)
                 {
@@ -92,6 +92,7 @@ namespace HandlerLocator
                                     classType = "record";
                                 }
 
+                                // Checking Access Modifier
                                 var methodAccess = GetMethodAccess(method);
                                 if (methodAccess == "private" || methodAccess == "file" || methodAccess == "unknown")
                                 {
