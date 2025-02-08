@@ -1,12 +1,12 @@
-﻿using System.Collections.Generic;
-using System.Linq;
-using HandlerLocator;
+﻿using HandlerLocator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.VisualStudio.LanguageServices;
 using Microsoft.VisualStudio.Shell.Interop;
 using Microsoft.VisualStudio.Text;
 using NavigateToHandler.Dialogs;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace NavigateToHandler
 {
@@ -22,19 +22,17 @@ namespace NavigateToHandler
             // Initialize our pane
             _pane ??= await VS.Windows.CreateOutputWindowPaneAsync(_paneTitle, lazyCreate: true);
 
-            VisualStudioWorkspace workspace = await VS.GetMefServiceAsync<VisualStudioWorkspace>();
-            if (workspace is null)
-                return;
+            var workspaceTask = VS.GetMefServiceAsync<VisualStudioWorkspace>();
+            var documentViewTask = VS.Documents.GetActiveDocumentViewAsync();
 
-            DocumentView documentView = await VS.Documents.GetActiveDocumentViewAsync();
-            if (documentView is null)
+            var workspace = workspaceTask.Result;
+            var documentView = documentViewTask.Result;
+            if (workspace is null || documentView is null)
                 return;
 
             DocumentId documentId = workspace.CurrentSolution.GetDocumentIdsWithFilePath(documentView.FilePath).FirstOrDefault();
             if (documentId is null)
-            {
                 return;
-            }
 
             // Get Roslyn document
             Document roslynDocument = workspace.CurrentSolution.GetDocument(documentId);
@@ -53,7 +51,8 @@ namespace NavigateToHandler
 
             if (allHandlers.Count == 1)
             {
-                await DisplayHandlerAsync(allHandlers.First());
+                var handler = allHandlers.First();
+                await DisplayHandlerAsync(handler);
                 return;
             }
 
@@ -87,7 +86,7 @@ namespace NavigateToHandler
             BringOutputWindowToFocus();
         }
 
-        private async Task DisplayHandlersInOutputPaneAsync(IEnumerable<IdentifiedHandler> allHandlers)
+        private async Task DisplayHandlersInOutputPaneAsync(List<IdentifiedHandler> allHandlers)
         {
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
 
@@ -104,7 +103,13 @@ namespace NavigateToHandler
             await writer.WriteLineAsync(message);
             await writer.WriteLineAsync(underlines);
 
-            foreach (IdentifiedHandler handler in allHandlers.OrderBy(h => h.SourceFile).ThenBy(h => h.ClassName).ThenBy(h => h.MethodName))
+            var sortedHandlers = allHandlers
+                .OrderBy(h => h.SourceFile)
+                .ThenBy(h => h.ClassName)
+                .ThenBy(h => h.MethodName)
+                .ToList();
+
+            foreach (IdentifiedHandler handler in sortedHandlers)
             {
                 await writer.WriteLineAsync($"{handler.DisplaySourceFile}:{handler.Fill} {handler.ClassType} {handler.ClassName}.{handler.MethodName}() as {handler.AsArgument}");
             }
