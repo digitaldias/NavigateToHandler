@@ -1,12 +1,12 @@
-﻿using HandlerLocator;
+﻿using System.Collections.Generic;
+using System.Linq;
+using HandlerLocator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.VisualStudio.LanguageServices;
 using Microsoft.VisualStudio.Shell.Interop;
 using Microsoft.VisualStudio.Text;
 using NavigateToHandler.Dialogs;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace NavigateToHandler
 {
@@ -25,8 +25,8 @@ namespace NavigateToHandler
             var workspaceTask = VS.GetMefServiceAsync<VisualStudioWorkspace>();
             var documentViewTask = VS.Documents.GetActiveDocumentViewAsync();
 
-            var workspace = workspaceTask.Result;
-            var documentView = documentViewTask.Result;
+            var workspace = await workspaceTask;
+            var documentView = await documentViewTask;
             if (workspace is null || documentView is null)
                 return;
 
@@ -64,7 +64,8 @@ namespace NavigateToHandler
                 var handler = allHandlers.FirstOrDefault(handler =>
                 {
                     // If the handler is in the same file as the current document and contains the line search start position, skip it
-                    if (handler.SourceFile != documentView.FilePath) return true;
+                    if (handler.SourceFile != documentView.FilePath)
+                        return true;
 
                     return handler.LineNumber > lineNumber || handler.EndLineNumber < lineNumber;
                 });
@@ -92,7 +93,7 @@ namespace NavigateToHandler
 
             var firstOne = allHandlers.First();
 
-            await ShowHandlersInToolWindowAsync(allHandlers.ToList());
+            await ShowHandlersInToolWindowAsync([.. allHandlers]);
             string message = $"Found {allHandlers.Count()} public/protected methods that consume '{allHandlers.First().TypeToFind}':";
             string underlines = new('-', message.Length);
 

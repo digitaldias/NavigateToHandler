@@ -107,6 +107,7 @@
   <ItemGroup>
     <Compile Include="FindHandlerLocator.cs" />
     <Compile Include="IdentifiedHandler.cs" />
+    <Compile Include="N2HMethodAccess.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>

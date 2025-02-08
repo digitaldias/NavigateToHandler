@@ -17,7 +17,7 @@ namespace HandlerLocator
 
         public string MethodName { get; set; }
 
-        public string MethodAccess { get; set; }
+        public N2HMethodAccess MethodAccess { get; set; }
 
         public int Column { get; set; }
 

@@ -1,14 +1,14 @@
-﻿using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Microsoft.CodeAnalysis.FindSymbols;
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.FindSymbols;
 
 namespace HandlerLocator
 {
@@ -31,7 +31,7 @@ namespace HandlerLocator
             {
                 return await FindAllHandlersTask();
             }
-            catch (Exception exception)
+            catch
             {
                 return new List<IdentifiedHandler>();
             }
@@ -56,28 +56,27 @@ namespace HandlerLocator
 
             ISymbol symbolDefinition = await SymbolFinder.FindSourceDefinitionAsync(symbol, _solution);
 
-            Parallel.ForEach(_solution.Projects, project => //  (var project in _solution.Projects)
+            Parallel.ForEach(_solution.Projects, project =>
             {
-                Parallel.ForEach(project.Documents, async document => //  (var document in project.Documents)
+                Parallel.ForEach(project.Documents, async document =>
                 {
                     SyntaxNode root = await document.GetSyntaxRootAsync();
                     SemanticModel model = await document.GetSemanticModelAsync();
-                    var methodDeclarations = root.DescendantNodes()
-                                                 .OfType<MethodDeclarationSyntax>();
+                    var methodDeclarations = root.DescendantNodes().OfType<MethodDeclarationSyntax>();
 
-                    Parallel.ForEach(methodDeclarations, async method =>
+                    Parallel.ForEach(methodDeclarations, async methodDeclaration =>
                     {
-                        var parameters = method.ParameterList.Parameters;
+                        var parameters = methodDeclaration.ParameterList.Parameters;
                         foreach (var parameter in parameters)
                         {
                             var parameterType = model.GetTypeInfo(parameter.Type).Type;
 
                             if (parameterType != null && await IsSymbolMatch(symbol, symbolDefinition, parameterType))
                             {
-                                var lineSpan = method.SyntaxTree.GetLineSpan(method.Span);
+                                var lineSpan = methodDeclaration.SyntaxTree.GetLineSpan(methodDeclaration.Span);
                                 var className = "Unknown";
                                 var classType = "Unknown";
-                                var classDeclaration = method.AncestorsAndSelf()
+                                var classDeclaration = methodDeclaration.AncestorsAndSelf()
                                     .OfType<ClassDeclarationSyntax>()
                                     .FirstOrDefault();
 
@@ -86,15 +85,15 @@ namespace HandlerLocator
                                     className = classDeclaration.Identifier.Text;
                                     classType = "class";
                                 }
-                                else if (method.Parent is RecordDeclarationSyntax recordClass)
+                                else if (methodDeclaration.Parent is RecordDeclarationSyntax recordClass)
                                 {
                                     className = recordClass.Identifier.Text;
                                     classType = "record";
                                 }
 
-                                // Checking Access Modifier
-                                var methodAccess = GetMethodAccess(method);
-                                if (methodAccess == "private" || methodAccess == "file" || methodAccess == "unknown")
+                                // Checking Access Modifier, skip private, file and unknown access
+                                var methodAccess = GetMethodAccess(methodDeclaration);
+                                if (methodAccess == N2HMethodAccess.Private || methodAccess == N2HMethodAccess.File || methodAccess == N2HMethodAccess.Unknown)
                                 {
                                     continue;
                                 }
@@ -106,14 +105,14 @@ namespace HandlerLocator
                                     ClassName = classDeclaration?.Identifier.Text ?? "Unknown",
                                     ClassType = classType,
                                     AsArgument = GetDisplayNameFor(parameterType),
-                                    MethodName = method.Identifier.Text + "(...)",
+                                    MethodName = methodDeclaration.Identifier.Text + "(...)",
                                     MethodAccess = methodAccess,
                                     SourceFile = document.FilePath,
                                     DisplaySourceFile = $"{document.FilePath}({lineSpan.StartLinePosition.Line + 1},{lineSpan.StartLinePosition.Character + 1})",
                                     LineNumber = lineSpan.StartLinePosition.Line + 1,
                                     EndLineNumber = lineSpan.EndLinePosition.Line + 1,
                                     Column = lineSpan.StartLinePosition.Character + 1,
-                                    CaretPosition = method.Span.Start
+                                    CaretPosition = methodDeclaration.Span.Start
                                 };
                                 allHandlers.Add(identifiedHandler);
                             }
@@ -125,30 +124,30 @@ namespace HandlerLocator
             return allHandlers;
         }
 
-        private static string GetMethodAccess(MethodDeclarationSyntax method)
+        private static N2HMethodAccess GetMethodAccess(MethodDeclarationSyntax method)
         {
             var modifiers = method.Modifiers;
             if (modifiers.Any(m => m.IsKind(SyntaxKind.PublicKeyword)))
             {
-                return "public";
+                return N2HMethodAccess.Public;
             }
             if (modifiers.Any(m => m.IsKind(SyntaxKind.ProtectedKeyword)))
             {
-                return "protected";
+                return N2HMethodAccess.Protected;
             }
             if (modifiers.Any(m => m.IsKind(SyntaxKind.InternalKeyword)))
             {
-                return "internal";
+                return N2HMethodAccess.Internal;
             }
             if (modifiers.Any(m => m.IsKind(SyntaxKind.PrivateKeyword)))
             {
-                return "private";
+                return N2HMethodAccess.Private;
             }
             if (modifiers.Any(m => m.IsKind(SyntaxKind.FileKeyword)))
             {
-                return "file";
+                return N2HMethodAccess.File;
             }
-            return "unknown";
+            return N2HMethodAccess.Unknown;
         }
 
         private string GetDisplayNameFor(ITypeSymbol parameterSymbol)
