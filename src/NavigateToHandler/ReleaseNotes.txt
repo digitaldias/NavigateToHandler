@@ -3,6 +3,9 @@ by: digitaldias
 
 contributions by: Giorgi
 
+v1.10
+- (by Giorgi) If there are only two matches, navigate directly to the other one (not the one under the cursor)
+
 v1.9
 - (by Giorgi) Fixes an issue where not all symbols were found in some cases
 - Removes private methods from the search results

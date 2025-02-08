@@ -111,6 +111,7 @@ namespace HandlerLocator
                                     SourceFile = document.FilePath,
                                     DisplaySourceFile = $"{document.FilePath}({lineSpan.StartLinePosition.Line + 1},{lineSpan.StartLinePosition.Character + 1})",
                                     LineNumber = lineSpan.StartLinePosition.Line + 1,
+                                    EndLineNumber = lineSpan.EndLinePosition.Line + 1,
                                     Column = lineSpan.StartLinePosition.Character + 1,
                                     CaretPosition = method.Span.Start
                                 };
