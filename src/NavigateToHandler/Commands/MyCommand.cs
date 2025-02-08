@@ -59,19 +59,34 @@ namespace NavigateToHandler
             if (allHandlers.Count == 2)
             {
                 SourceText sourceText = await roslynDocument.GetTextAsync();
-                int lineNumber = sourceText.Lines.GetLineFromPosition(position).LineNumber + 1;
+                int cursorLine = sourceText.Lines.GetLineFromPosition(position).LineNumber + 1;
 
-                var handler = allHandlers.FirstOrDefault(handler =>
+                var firstHandler = allHandlers[0];
+                var secondHandler = allHandlers[1];
+
+                // Both handlers need to be in the same file as the document.
+                if (firstHandler.SourceFile == documentView.FilePath && secondHandler.SourceFile == documentView.FilePath)
                 {
-                    // If the handler is in the same file as the current document and contains the line search start position, skip it
-                    if (handler.SourceFile != documentView.FilePath)
-                        return true;
+                    bool isCursorInFirst = cursorLine == firstHandler.LineNumber;
+                    bool isCursorInSecond = cursorLine == secondHandler.LineNumber;
 
-                    return handler.LineNumber > lineNumber || handler.EndLineNumber < lineNumber;
-                });
+                    if (isCursorInFirst && !isCursorInSecond)
+                    {
+                        // Cursor is in first handler: jump to second.
+                        await DisplayHandlerAsync(secondHandler);
+                        return;
+                    }
+                    if (isCursorInSecond && !isCursorInFirst)
+                    {
+                        // Cursor is in second handler: jump to first.
+                        await DisplayHandlerAsync(firstHandler);
+                        return;
+                    }
 
-                await DisplayHandlerAsync(handler);
-                return;
+                    // If the cursor isn't inside either, just default to the first handler.
+                    await DisplayHandlerAsync(firstHandler);
+                    return;
+                }
             }
 
             await DisplayHandlersInOutputPaneAsync(allHandlers);

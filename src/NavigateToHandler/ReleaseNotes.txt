@@ -1,7 +1,14 @@
 Navigate to Handler
 by: digitaldias
 
-contributions by: Giorgi
+contributions by: Giorgi, MatinGhanbari 
+
+v1.12
+- Fixes a bug where navigating between results on the same page would not work
+
+v1.11
+- (by MatinGhanbari) Fixes an issue where the extension would not work in some cases
+- Code cleanup and minor refactoring
 
 v1.10
 - (by Giorgi) If there are only two matches, navigate directly to the other one (not the one under the cursor)
