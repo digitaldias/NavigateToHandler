@@ -1,7 +1,8 @@
 # NavigateToHandler
 VSIX Extension for navigating to a public handler for the variable under the cursor
 
-[YouTube Showcase](https://youtu.be/THvwOrCXdwc?si=OTpLgrny1spqzrnM)
+[![YouTube showcase](https://i9.ytimg.com/vi_webp/THvwOrCXdwc/mqdefault.webp?v=67a979b6&sqp=CLzaq70G&rs=AOn4CLCk8tHGEaqLK22HIVfz1PPb1HqoWA)](https://youtu.be/THvwOrCXdwc?si=OTpLgrny1spqzrnM)
+
 
 This initial version solves a particular issue that Visual Studio does not offer: A way to navigate from a `_mediator.Send(something)` call to its corresponding `Handle(something)` method.
 The aim of this repository, however, is to reach a state where you can navigate to any public API that utilizes the variable type under the cursor, not only Mediator Handlers. 
