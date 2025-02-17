@@ -1,14 +1,18 @@
 # NavigateToHandler
 VSIX Extension for navigating to a public handler for the variable under the cursor
 
-[![YouTube showcase](https://i9.ytimg.com/vi_webp/THvwOrCXdwc/mqdefault.webp?v=67a979b6&sqp=CLzaq70G&rs=AOn4CLCk8tHGEaqLK22HIVfz1PPb1HqoWA)](https://youtu.be/THvwOrCXdwc?si=OTpLgrny1spqzrnM)
-
+[![YouTube showcase](https://img.youtube.com/vi/THvwOrCXdwc/mqdefault.jpg)](https://youtu.be/THvwOrCXdwc?si=OTpLgrny1spqzrnM)
 
 This initial version solves a particular issue that Visual Studio does not offer: A way to navigate from a `_mediator.Send(something)` call to its corresponding `Handle(something)` method.
 The aim of this repository, however, is to reach a state where you can navigate to any public API that utilizes the variable type under the cursor, not only Mediator Handlers. 
 
 ## Usage
-To use, simply place your cursor on top of the variable/declaration for which you want to look up handlers. Then, select **EDIT --> Navigate to Handler**, and the extension will open its corresponding handler class.
+To use the extension, place your cursor on the variable or declaration whose handler you want to find. Then, you can access the **Navigate to Handler** command in one of two ways:  
+
+1. From the **Edit** menu in the top toolbar.  
+2. By right-clicking and selecting **Navigate to Handler** from the context menu.  
+
+The extension will then locate and open the corresponding handler class automatically.
 
 > **TIP** <br />
 > It is advised to provide a keyboard shortcut to the command. I've selected **CTRL+ALT+H** for mine. 
