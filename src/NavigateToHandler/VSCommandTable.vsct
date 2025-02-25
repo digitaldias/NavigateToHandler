@@ -13,7 +13,7 @@
 				<Parent guid="VSMainMenu" id="Edit" />
 			</Group>
 
-			<Group guid="NavigateToHandler" id="CodeWindowNavigationContextMenuGroup" priority="0x0600">
+			<Group guid="NavigateToHandler" id="CodeWindowNavigationContextMenuGroup" priority="0x0100">
 				<Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_CODEWIN" />
 			</Group>
 		</Groups>
