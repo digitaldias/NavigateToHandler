@@ -1,7 +1,13 @@
-Navigate to Handler
+﻿Navigate to Handler
 by: digitaldias
 
 contributions by: Giorgi, MatinGhanbari 
+
+v1.14
+- (by Olcay Bayram) The context menu command will now be displayed above the group that starts with Peek Definition
+
+v1.13
+- No release, bad luck :)
 
 v1.12
 - Fixes a bug where navigating between results on the same page would not work
