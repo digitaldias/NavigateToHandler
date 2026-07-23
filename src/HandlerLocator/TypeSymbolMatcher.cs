@@ -136,6 +136,13 @@ namespace HandlerLocator
                 return false;
             }
 
+            // Non-generic interfaces have no type arguments to compare -- same original
+            // definition is the full match.
+            if (!left.IsGenericType)
+            {
+                return true;
+            }
+
             // Check if both are generic and have the same number of type arguments
             if (left.IsGenericType && implementedInterface.IsGenericType)
             {
