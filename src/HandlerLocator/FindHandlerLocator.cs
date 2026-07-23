@@ -57,19 +57,22 @@ namespace HandlerLocator
             ISymbol symbolDefinition = await SymbolFinder.FindSourceDefinitionAsync(symbol, _solution);
             var searchTarget = (Symbol: symbol, SymbolDefinition: symbolDefinition);
 
-            Parallel.ForEach(_solution.Projects, project =>
+            var projectTasks = _solution.Projects.Select(async project =>
             {
-                Parallel.ForEach(project.Documents, async document =>
+                var documentTasks = project.Documents.Select(async document =>
                 {
                     SyntaxNode root = await document.GetSyntaxRootAsync();
                     SemanticModel model = await document.GetSemanticModelAsync();
                     var methodDeclarations = root.DescendantNodes().OfType<MethodDeclarationSyntax>();
 
                     var documentContext = (Model: model, Document: document);
-                    Parallel.ForEach(methodDeclarations, methodDeclaration =>
+                    var methodTasks = methodDeclarations.Select(methodDeclaration =>
                         CollectMatchingHandlerAsync(methodDeclaration, documentContext, searchTarget, allHandlers));
+                    await Task.WhenAll(methodTasks);
                 });
+                await Task.WhenAll(documentTasks);
             });
+            await Task.WhenAll(projectTasks);
 
             return allHandlers;
         }

@@ -16,6 +16,10 @@ public class SpecificEvent : EventBase<string> {}
 public interface IHandler<T> {}
 public class ConcreteHandler : IHandler<string> {}
 public class OtherHandler : IHandler<int> {}
+
+public interface IBase {}
+public interface IDerived : IBase {}
+public class ImplDerived : IDerived {}
 ";
 
         [Fact]
@@ -69,16 +73,23 @@ public class OtherHandler : IHandler<int> {}
         }
 
         [Fact]
-        public void ImplementsInterface_ReturnsFalseForPlainNonGenericInterface()
+        public void ImplementsInterface_ReturnsTrueForPlainNonGenericInterface()
         {
-            // Pins a real gap: ImplementsInterfaceWithMatchingTypeArguments only matches
-            // generic interfaces (left.IsGenericType && implementedInterface.IsGenericType);
-            // a non-generic exact interface implementation falls through to `return false`.
             var compilation = CompilationHelper.Compile(Source);
             var notification = compilation.GetType("INotification");
             var orderCreated = compilation.GetType("OrderCreated");
 
-            Assert.False(TypeSymbolMatcher.ImplementsInterface(notification, orderCreated));
+            Assert.True(TypeSymbolMatcher.ImplementsInterface(notification, orderCreated));
+        }
+
+        [Fact]
+        public void ImplementsInterface_MatchesThroughDerivedInterface()
+        {
+            var compilation = CompilationHelper.Compile(Source);
+            var iBase = compilation.GetType("IBase");
+            var implDerived = compilation.GetType("ImplDerived");
+
+            Assert.True(TypeSymbolMatcher.ImplementsInterface(iBase, implDerived));
         }
 
         [Fact]

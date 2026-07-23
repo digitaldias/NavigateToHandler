@@ -28,6 +28,7 @@ public class Handlers
     void OnSpecificEventImplicitPrivate(SpecificEvent e) { }
 
     public void OnConcreteHandler(ConcreteHandler e) { }
+    public void OnOrderCreated(OrderCreated e) { }
 }
 ";
 
@@ -78,28 +79,64 @@ public class Handlers
         }
 
         [Fact]
-        public async Task FindAllHandlers_ReturnsEmpty_ForPlainNonGenericInterface()
+        public async Task FindAllHandlers_FindsHandler_ForPlainNonGenericInterface()
         {
-            // Pins a real gap (see TypeMatchingTests.ImplementsInterface_ReturnsFalseForPlainNonGenericInterface):
-            // IsSymbolMatch's IsInherited shortcut is disabled for interfaces, and the
-            // ImplementsInterface fallback only matches generic interfaces, so searching for a
-            // plain non-generic interface currently finds nothing, even though OrderCreated
-            // implements INotification.
             var (fixture, typesDocument) = CreateWorkspace();
             var linePosition = TypesSource.IndexOf("INotification");
 
             var locator = new FindHandlerLocator(fixture.Solution, typesDocument, linePosition);
             var handlers = (await locator.FindAllHandlers()).ToList();
 
-            Assert.Empty(handlers);
+            var handler = Assert.Single(handlers);
+            Assert.Equal("OnOrderCreated(...)", handler.MethodName);
+        }
+
+        [Fact]
+        public async Task FindAllHandlers_CollectsAllMatches_AcrossManyDocuments()
+        {
+            var (fixture, typesDocument) = CreateWorkspace();
+
+            const int documentCount = 30;
+            for (int i = 0; i < documentCount; i++)
+            {
+                fixture.AddDocument($"ScaleHandlers{i}.cs", $@"
+public class ScaleHandler{i}
+{{
+    public void OnScaleEvent{i}(SpecificEvent e) {{ }}
+    public void Ignore{i}(ConcreteHandler c) {{ }}
+}}
+");
+            }
+
+            var currentTypesDocument = fixture.Solution.GetDocument(typesDocument.Id);
+            var linePosition = TypesSource.IndexOf("EventBase");
+            var locator = new FindHandlerLocator(fixture.Solution, currentTypesDocument, linePosition);
+            var handlers = (await locator.FindAllHandlers()).ToList();
+
+            var scaleHandlerNames = handlers
+                .Select(h => h.MethodName)
+                .Where(n => n.StartsWith("OnScaleEvent"))
+                .ToList();
+
+            Assert.Equal(documentCount, scaleHandlerNames.Count);
+            Assert.Equal(documentCount, scaleHandlerNames.Distinct().Count());
+            for (int i = 0; i < documentCount; i++)
+            {
+                Assert.Contains($"OnScaleEvent{i}(...)", scaleHandlerNames);
+            }
         }
 
         [Fact]
         public async Task FindAllHandlers_ReturnsEmpty_WhenCursorIsNotOnAType()
         {
-            var (fixture, typesDocument) = CreateWorkspace();
+            // A document with no type declarations at all -- position 0 in TypesSource
+            // does not work for this: Roslyn's FindNode ties position 0 to the first
+            // declaration in the file (INotification) rather than to "nothing".
+            var fixture = new AdhocWorkspaceFixture();
+            var emptyDoc = fixture.AddDocument("Empty.cs", "// no types here\n");
+            var emptyDocument = fixture.Solution.GetDocument(emptyDoc.Id);
 
-            var locator = new FindHandlerLocator(fixture.Solution, typesDocument, 0);
+            var locator = new FindHandlerLocator(fixture.Solution, emptyDocument, 0);
             var handlers = (await locator.FindAllHandlers()).ToList();
 
             Assert.Empty(handlers);
