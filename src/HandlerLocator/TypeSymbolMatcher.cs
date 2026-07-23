@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Linq;
 using Microsoft.CodeAnalysis;
@@ -40,44 +41,55 @@ namespace HandlerLocator
             var leftSide = typeToMatch as INamedTypeSymbol;
             var rightSide = candidateType as INamedTypeSymbol;
 
-            if (leftSide.IsGenericType && rightSide.BaseType != null)
+            return MatchesGenericBaseType(leftSide, rightSide) || MatchesInterface(leftSide, rightSide);
+        }
+
+        private static bool MatchesGenericBaseType(INamedTypeSymbol leftSide, INamedTypeSymbol rightSide)
+        {
+            if (!leftSide.IsGenericType || rightSide.BaseType == null)
+                return false;
+
+            var baseType = rightSide.BaseType;
+
+            if (baseType.IsGenericType)
             {
-                var baseType = rightSide.BaseType;
-
-                if (baseType.IsGenericType)
+                Debug.WriteLine($"Comparing {leftSide.Name} to {baseType.Name}");
+                var argumentsAreTheSame = ArgumentsAreTheSame(leftSide, baseType);
+                if (!argumentsAreTheSame && baseType.BaseType != null)
                 {
-                    Debug.WriteLine($"Comparing {leftSide.Name} to {baseType.Name}");
-                    var argumentsAreTheSame = ArgumentsAreTheSame(leftSide, baseType);
-                    if (!argumentsAreTheSame && baseType.BaseType != null)
-                    {
-                        var testAgainstBaseType = ArgumentsAreTheSame(leftSide, baseType.OriginalDefinition);
-                        return testAgainstBaseType;
-                    }
-
-                    return argumentsAreTheSame;
+                    return ArgumentsAreTheSame(leftSide, baseType.OriginalDefinition);
                 }
 
-                if (AreEqual(leftSide, rightSide))
-                    return true;
-
-                if (AreEqual(leftSide, baseType.OriginalDefinition))
-                    return true;
-
-                if (AreEqual(leftSide.OriginalDefinition, baseType.OriginalDefinition))
-                    return true;
+                return argumentsAreTheSame;
             }
 
-            if (leftSide.TypeKind == TypeKind.Interface && rightSide.AllInterfaces.Any())
+            return MatchesNonGenericBaseType(leftSide, rightSide, baseType);
+        }
+
+        private static bool MatchesNonGenericBaseType(INamedTypeSymbol leftSide, INamedTypeSymbol rightSide, INamedTypeSymbol baseType)
+        {
+            if (AreEqual(leftSide, rightSide))
+                return true;
+
+            if (AreEqual(leftSide, baseType.OriginalDefinition))
+                return true;
+
+            return AreEqual(leftSide.OriginalDefinition, baseType.OriginalDefinition);
+        }
+
+        private static bool MatchesInterface(INamedTypeSymbol leftSide, INamedTypeSymbol rightSide)
+        {
+            if (leftSide.TypeKind != TypeKind.Interface || !rightSide.AllInterfaces.Any())
+                return false;
+
+            foreach (var iface in rightSide.AllInterfaces)
             {
-                foreach (var iface in rightSide.AllInterfaces)
+                if (AreEqual(leftSide, iface))
                 {
-                    var isMatch = AreEqual(leftSide, iface);
-                    if (isMatch)
-                    {
-                        return ArgumentsAreTheSame(leftSide, iface);
-                    }
+                    return ArgumentsAreTheSame(leftSide, iface);
                 }
             }
+
             return false;
         }
 
@@ -143,44 +155,14 @@ namespace HandlerLocator
                 return true;
             }
 
-            // Check if both are generic and have the same number of type arguments
-            if (left.IsGenericType && implementedInterface.IsGenericType)
+            // Check if both are generic and have the same number of type arguments.
+            // A non-null verdict here is authoritative: false means a definite mismatch
+            // (skip the recursive fallback below), true means a match was found.
+            // Null means "no verdict yet" -- fall through to the recursive base-interface check.
+            var genericArgumentsMatch = TryMatchGenericTypeArguments(left, implementedInterface);
+            if (genericArgumentsMatch.HasValue)
             {
-                var leftTypeArguments = left.TypeArguments;
-                var implementedTypeArguments = implementedInterface.TypeArguments;
-
-                if (leftTypeArguments.Length != implementedTypeArguments.Length)
-                {
-                    return false;
-                }
-
-                for (int i = 0; i < leftTypeArguments.Length; i++)
-                {
-                    var rightSideInterface = implementedTypeArguments[i];
-                    if (TypeArgumentsMatch(leftTypeArguments[i], rightSideInterface))
-                    {
-                        return true;
-                    }
-
-                    if (rightSideInterface.BaseType != null && rightSideInterface.BaseType.Kind == SymbolKind.NamedType)
-                    {
-                        if (leftTypeArguments[i].TypeKind == TypeKind.TypeParameter)
-                        {
-                            return true;
-                        }
-                        foreach (var rightInterface in implementedTypeArguments[i].BaseType.AllInterfaces)
-                        {
-                            if (TypeArgumentsMatch(left, rightInterface))
-                            {
-                                return true;
-                            }
-                        }
-                        if (TypeArgumentsMatch(leftTypeArguments[i], implementedTypeArguments[i].BaseType))
-                        {
-                            return true;
-                        }
-                    }
-                }
+                return genericArgumentsMatch.Value;
             }
 
             // Recursively check base interfaces of the implemented interface
@@ -195,6 +177,60 @@ namespace HandlerLocator
             return false;
         }
 
+        private static bool? TryMatchGenericTypeArguments(INamedTypeSymbol left, INamedTypeSymbol implementedInterface)
+        {
+            if (!implementedInterface.IsGenericType)
+            {
+                return null;
+            }
+
+            var leftTypeArguments = left.TypeArguments;
+            var implementedTypeArguments = implementedInterface.TypeArguments;
+
+            if (leftTypeArguments.Length != implementedTypeArguments.Length)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < leftTypeArguments.Length; i++)
+            {
+                if (TypeArgumentAtIndexMatches(left, leftTypeArguments[i], implementedTypeArguments[i]))
+                {
+                    return true;
+                }
+            }
+
+            return null;
+        }
+
+        private static bool TypeArgumentAtIndexMatches(INamedTypeSymbol left, ITypeSymbol leftTypeArgument, ITypeSymbol implementedTypeArgument)
+        {
+            if (TypeArgumentsMatch(leftTypeArgument, implementedTypeArgument))
+            {
+                return true;
+            }
+
+            if (implementedTypeArgument.BaseType == null || implementedTypeArgument.BaseType.Kind != SymbolKind.NamedType)
+            {
+                return false;
+            }
+
+            if (leftTypeArgument.TypeKind == TypeKind.TypeParameter)
+            {
+                return true;
+            }
+
+            foreach (var rightInterface in implementedTypeArgument.BaseType.AllInterfaces)
+            {
+                if (TypeArgumentsMatch(left, rightInterface))
+                {
+                    return true;
+                }
+            }
+
+            return TypeArgumentsMatch(leftTypeArgument, implementedTypeArgument.BaseType);
+        }
+
         internal static bool TypeArgumentsMatch(ITypeSymbol leftTypeArgument, ITypeSymbol implementedTypeArgument)
         {
             // Check if the type arguments are equal
@@ -203,32 +239,38 @@ namespace HandlerLocator
                 return true;
             }
 
-            // If the type arguments are themselves generic, recursively check their type arguments
-            if (leftTypeArgument is INamedTypeSymbol leftNamedType && implementedTypeArgument is INamedTypeSymbol implementedNamedType)
+            // Only named types can have nested type arguments to compare
+            if (!(leftTypeArgument is INamedTypeSymbol leftNamedType && implementedTypeArgument is INamedTypeSymbol implementedNamedType))
             {
-                if (leftNamedType.IsGenericType && implementedNamedType.IsGenericType)
+                return false;
+            }
+
+            // Both sides must be generic for there to be nested type arguments
+            if (!leftNamedType.IsGenericType || !implementedNamedType.IsGenericType)
+            {
+                return false;
+            }
+
+            // Recursively check their nested type arguments
+            return NestedTypeArgumentsMatch(leftNamedType.TypeArguments, implementedNamedType.TypeArguments);
+        }
+
+        private static bool NestedTypeArgumentsMatch(ImmutableArray<ITypeSymbol> leftTypeArguments, ImmutableArray<ITypeSymbol> implementedTypeArguments)
+        {
+            if (leftTypeArguments.Length != implementedTypeArguments.Length)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < leftTypeArguments.Length; i++)
+            {
+                if (!TypeArgumentsMatch(leftTypeArguments[i], implementedTypeArguments[i]))
                 {
-                    var leftNestedTypeArguments = leftNamedType.TypeArguments;
-                    var implementedNestedTypeArguments = implementedNamedType.TypeArguments;
-
-                    if (leftNestedTypeArguments.Length != implementedNestedTypeArguments.Length)
-                    {
-                        return false;
-                    }
-
-                    for (int i = 0; i < leftNestedTypeArguments.Length; i++)
-                    {
-                        if (!TypeArgumentsMatch(leftNestedTypeArguments[i], implementedNestedTypeArguments[i]))
-                        {
-                            return false;
-                        }
-                    }
-
-                    return true;
+                    return false;
                 }
             }
 
-            return false;
+            return true;
         }
     }
 }
